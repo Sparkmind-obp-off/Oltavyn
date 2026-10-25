@@ -34,17 +34,72 @@ A candidate first test is: research one niche → shortlist evidence-backed oppo
 
 Do not assume any API, account connection, domain, hosting provider, database, AI model, or paid service is configured until verified.
 
-## Decisions still to make
+## Implementation status (2026-10-25)
 
-- First target user and niche for validation.
-- First workflow and success metric.
-- Supported research sources and their access method.
-- Initial publishing channels and available permissions.
-- Technical stack, hosting, database, authentication, and model providers.
-- Privacy, retention, and workspace/account boundaries.
-- Brand domain and deployment plan.
+| Item | Status |
+|---|---|
+| MVP end-to-end loop (workspace → evidence → opportunity → content → approval → experiment → observation → learning → export/delete) | **Implemented & tested** (automated smoke test, 44 checks; headless-browser UI walkthrough) |
+| Production deployment | See *URLs* below — verified by running the smoke test against production |
+| Market / user validation | **Not validated.** No real operator has completed a loop yet |
 
-These decisions should be documented before implementation. Choose the simplest stack that satisfies the validated workflow and the owner's cost constraints.
+### URLs
+- **Production:** https://oltavyn.pages.dev
+- **GitHub:** https://github.com/Sparkmind-obp-off/Oltavyn
+- **Health check:** `GET /api/health`
+
+### Stack (see `docs/DECISIONS.md`)
+Hono on Cloudflare Pages (Workers runtime) · Cloudflare D1 (SQLite) · vanilla JS SPA with strict CSP · Indonesian UI. Deployed to the owner's own Cloudflare account (BYOK). Free tier; no paid services started.
+
+### Features implemented
+- **Auth:** email/password (PBKDF2-SHA256), HttpOnly SameSite=Strict session cookie (hashed in DB), rate-limited login/register, CSRF guard.
+- **Workspaces:** topic/niche, audience, goal, allowed sources; per-user isolation enforced server-side on every route.
+- **Research:** evidence ledger with source URL/reference (required), observed/captured timestamps, collection method, source excerpt kept separate from our interpretation, reliability notes, limitations, archive.
+- **Opportunities:** link evidence as supports / challenges / context; automatically flagged **hypothesis** when no supporting evidence; editable 1–5 factor scores (no hidden total); accept/reject.
+- **Content Studio:** deterministic evidence-grounded draft generator (`template_v1`, no external AI); immutable versions with SHA-256; claim→evidence map (server refuses "supported" without evidence and rejects foreign evidence IDs); approval bound to exact version + hash + destination; Markdown download.
+- **Experiments:** manual publication log (published requires URL; not published requires reason); observations with value status (observed / not yet available / not collected / failed), unit, window, origin. Missing data is stored as NULL, never zero.
+- **Learning:** deterministic summary from recorded data only; same-metric+unit comparisons; next test with reasoning, cited record IDs, and uncertainty.
+- **Overview:** real counts, next action, WELL (7-day completed loops + share with observed results).
+- **Settings:** edit workspace, JSON export, hard delete with typed confirmation.
+- **Audit log** of key actions (no content or secrets).
+
+### API (all under `/api`, JSON, session cookie required except auth/health)
+`POST /auth/register` · `POST /auth/login` · `POST /auth/logout` · `GET /auth/me`
+`GET|POST /workspaces` · `GET|PATCH|DELETE /workspaces/:id` (`DELETE ?confirm=<name>`) · `GET /workspaces/:id/overview`
+`GET|POST /workspaces/:id/evidence` · `GET|PATCH /evidence/:id`
+`GET|POST /workspaces/:id/opportunities` · `GET|PATCH /opportunities/:id` · `POST /opportunities/:id/generate-brief`
+`GET /workspaces/:id/assets` · `GET /assets/:id` · `POST /assets/:id/versions` · `POST /assets/:id/submit-review` · `POST /asset-versions/:id/approval`
+`GET|POST /workspaces/:id/experiments` · `GET|PATCH /experiments/:id` · `POST /experiments/:id/observations`
+`GET /workspaces/:id/learning-summary` · `GET /workspaces/:id/export`
+
+### Data model
+See `migrations/0001_initial_schema.sql`: users, sessions, workspaces, evidence_items, opportunities, opportunity_evidence, content_assets, content_versions, approvals, experiments, observations, audit_events, rate_limits.
+
+### Not yet implemented / known gaps
+- Password reset, email verification, MFA, self-service account deletion.
+- AI model provider (ADR-007 open; needs owner approval + cost ceiling).
+- Any publishing integration (manual by design for MVP).
+- Lint + unit-test runner; accessibility audit with assistive tech; automated backups beyond D1 Time Travel.
+- Team/multi-member workspaces.
+
+### Recommended next steps
+1. Run one **real** loop with a real operator and real evidence; record which evidence informed the decision (first validation gate).
+2. Add password reset (needs an email provider — owner decision on vendor/cost).
+3. Decide ADR-007 (model provider) only if the template draft proves insufficient in real use.
+4. Add lint/unit tests and an accessibility pass.
+
+### Development & release workflow
+```bash
+npm install
+npm run db:migrate:local          # clean local D1
+npm run build && pm2 start ecosystem.config.cjs
+npm run test:smoke                # BASE_URL defaults to http://localhost:3000
+# release
+npm run typecheck && npm run build
+npm run db:migrate:prod           # only when new migrations exist
+npm run deploy
+BASE_URL=https://oltavyn.pages.dev npm run test:smoke
+```
+The smoke test creates throwaway `@test.local` users and deletes their workspaces at the end (user rows remain).
 
 ## Project stages
 

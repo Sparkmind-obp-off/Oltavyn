@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "oltavyn",
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "pages_build_output_dir": "./dist",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "oltavyn-production",
+      "database_id": "94c9a84b-7fa8-49a4-b9f2-8006450a767b",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
