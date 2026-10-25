@@ -99,7 +99,12 @@ npm run db:migrate:prod           # only when new migrations exist
 npm run deploy
 BASE_URL=https://oltavyn.pages.dev npm run test:smoke
 ```
-The smoke test creates throwaway `@test.local` users and deletes their workspaces at the end (user rows remain).
+The smoke test creates throwaway `@test.local` users and deletes their workspaces at the end; remove the user rows with `scripts/cleanup-test-data.sql`.
+
+### Deployment record
+| Date | Commit | Target | Verification |
+|---|---|---|---|
+| 2026-10-25 | `41b9892` | Cloudflare Pages `oltavyn` (main) + D1 `oltavyn-production`, owner's account (BYOK) | `/api/health` 200; smoke test 44/44 against https://oltavyn.pages.dev; headless-browser full-loop UI walkthrough with zero console errors; test data removed afterwards (0 users, 0 workspaces). Cost: Cloudflare free tier, $0 incurred. |
 
 ## Project stages
 
