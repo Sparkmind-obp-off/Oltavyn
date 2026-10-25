@@ -310,7 +310,7 @@ function evidenceItem(e) {
 async function pageResearch(main, id) {
   if (id) return evidenceDetail(main, id)
   const showArchived = new URLSearchParams(location.hash.split('?')[1] || '').get('archived') === '1'
-  const { root } = await loadInto(main,
+  const loading = loadInto(main,
     head('Riset', 'Buku besar bukti. Setiap rekomendasi harus bisa ditelusuri ke sini.', html`<button class="btn btn-primary" id="add-ev">+ Tambah bukti</button>`),
     () => api('GET', `/workspaces/${state.wsId}/evidence${showArchived ? '?status=archived' : ''}`),
     (d) => d.evidence.length
@@ -319,6 +319,7 @@ async function pageResearch(main, id) {
         ${showArchived ? html`<a href="#/research">Kembali ke bukti aktif</a>` : html`<button class="btn btn-primary" data-add>+ Tambah bukti pertama</button>`}</div>`)
   const open = () => dialog({ title: 'Tambah bukti', body: evidenceFields(), wide: true, onSubmit: async (f) => { await api('POST', `/workspaces/${state.wsId}/evidence`, compact(formData(f))); toast('Bukti disimpan.'); render() } })
   $('#add-ev').onclick = open
+  const { root } = await loading
   if (root) {
     $$('[data-add]', root).forEach((b) => (b.onclick = open))
     $$('[data-ev]', root).forEach((el) => { el.onclick = () => go(`#/research/${el.dataset.ev}`); el.onkeydown = (e) => e.key === 'Enter' && el.click() })
@@ -374,7 +375,7 @@ function oppPayload(form) {
 }
 async function pageOpportunities(main, id) {
   if (id) return opportunityDetail(main, id)
-  const { root } = await loadInto(main,
+  const loading = loadInto(main,
     head('Peluang', 'Kandidat peluang dengan bukti pendukung, bukti yang menantang, dan hal yang belum diketahui.', html`<button class="btn btn-primary" id="add-opp">+ Peluang baru</button>`),
     () => api('GET', `/workspaces/${state.wsId}/opportunities`),
     (d) => d.opportunities.length ? d.opportunities.map((o) => html`
@@ -386,6 +387,7 @@ async function pageOpportunities(main, id) {
       : html`<div class="empty"><h3>Belum ada peluang</h3><p>Buat peluang dan tautkan ke bukti di Riset. Tanpa bukti pendukung, peluang otomatis ditandai sebagai hipotesis untuk diuji.</p><button class="btn btn-primary" data-add>+ Peluang pertama</button></div>`)
   const open = async () => dialog({ title: 'Peluang baru', body: await opportunityFields(), wide: true, onSubmit: async (f) => { const r = await api('POST', `/workspaces/${state.wsId}/opportunities`, oppPayload(f)); toast('Peluang dibuat.'); go(`#/opportunities/${r.opportunity.id}`) } })
   $('#add-opp').onclick = open
+  const { root } = await loading
   if (root) {
     $$('[data-add]', root).forEach((b) => (b.onclick = open))
     $$('[data-opp]', root).forEach((el) => { el.onclick = () => go(`#/opportunities/${el.dataset.opp}`); el.onkeydown = (e) => e.key === 'Enter' && el.click() })
@@ -513,7 +515,7 @@ async function assetDetail(main, id) {
 async function pageExperiments(main, id) {
   if (id) return experimentDetail(main, id)
   const preVersion = new URLSearchParams(location.hash.split('?')[1] || '').get('version')
-  const { root } = await loadInto(main,
+  const loading = loadInto(main,
     head('Eksperimen', 'Log publikasi manual dan observasi hasil. OLTAVYN tidak memposting apa pun secara otomatis.', html`<button class="btn btn-primary" id="add-exp">+ Eksperimen baru</button>`),
     () => api('GET', `/workspaces/${state.wsId}/experiments`),
     (d) => d.experiments.length ? html`<table><thead><tr><th>Konten</th><th>Hipotesis</th><th>Kanal</th><th>Status</th><th>Observasi</th></tr></thead><tbody>
@@ -534,6 +536,7 @@ async function pageExperiments(main, id) {
     })
   }
   $('#add-exp').onclick = open
+  const { root } = await loading
   if (preVersion) open()
   if (root) $$('[data-exp]', root).forEach((el) => { el.onclick = () => go(`#/experiments/${el.dataset.exp}`); el.onkeydown = (e) => e.key === 'Enter' && el.click() })
 }
