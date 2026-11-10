@@ -121,3 +121,16 @@ The smoke test creates throwaway `@test.local` users and deletes their workspace
 - The assistant may recommend and execute technical choices within the agreed scope, but must report material assumptions and blockers.
 - Do not claim a feature is live, tested, connected, or successful without verifiable evidence.
 - Keep decisions and implementation notes in this repository so the project can be resumed consistently.
+
+
+## Faceless Affiliate Content Factory
+
+OLTAVYN is being extended as an internal-first, hybrid Faceless Affiliate Content Factory. Shopee Affiliate Indonesia is the first validation use case; the core remains marketplace- and platform-neutral. The factory reuses the existing evidence, opportunity, content approval, experiment, and learning workflow.
+
+- Technical blueprint: [docs/affiliate-factory/BLUEPRINT.md](docs/affiliate-factory/BLUEPRINT.md)
+- Operating workflow: [docs/affiliate-factory/WORKFLOW.md](docs/affiliate-factory/WORKFLOW.md)
+- Data model: [docs/affiliate-factory/DATA-MODEL.md](docs/affiliate-factory/DATA-MODEL.md)
+- Phase status and guardrails: [docs/affiliate-factory/README.md](docs/affiliate-factory/README.md)
+- Phase 1 schema: [migrations/0002_affiliate_factory.sql](migrations/0002_affiliate_factory.sql)
+
+The Phase 1 changes are being prepared on branch `feat/faceless-affiliate-factory-phase1`. Do not assume the migration has been applied or deployed until local verification and owner-approved release steps are complete. No paid providers or paid scraping are enabled.
