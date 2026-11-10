@@ -88,7 +88,7 @@ CREATE INDEX idx_affiliate_product_scores
 CREATE TABLE affiliate_experiment_products (
   experiment_id TEXT NOT NULL REFERENCES experiments(id) ON DELETE CASCADE,
   product_id TEXT NOT NULL REFERENCES affiliate_products(id) ON DELETE CASCADE,
-  channel_id TEXT REFERENCES affiliate_channels(id) ON DELETE SET NULL,
+  channel_id TEXT NOT NULL REFERENCES affiliate_channels(id) ON DELETE CASCADE,
   affiliate_url TEXT,
   created_at TEXT NOT NULL,
   PRIMARY KEY (experiment_id, product_id, channel_id)
