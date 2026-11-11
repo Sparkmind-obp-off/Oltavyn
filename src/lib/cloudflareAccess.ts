@@ -25,26 +25,35 @@ async function loadKeys(teamDomain: string): Promise<AccessJwk[]> {
 }
 
 export async function verifyAccessToken(token: string, teamDomain: string, audiencesAllowed: string[]) {
+  if (token.length > 16_384) throw new ApiError(403, 'access_invalid', 'Token Cloudflare Access terlalu besar.')
   const parts = token.split('.')
   if (parts.length !== 3) throw new ApiError(403, 'access_invalid', 'Token Cloudflare Access tidak valid.')
   let header: { alg?: string; kid?: string }, claims: AccessClaims
   try { header = decodePart(parts[0]); claims = decodePart(parts[1]) }
   catch { throw new ApiError(403, 'access_invalid', 'Token Cloudflare Access tidak valid.') }
   if (header.alg !== 'RS256' || !header.kid) throw new ApiError(403, 'access_invalid', 'Algoritma token Cloudflare Access tidak diizinkan.')
-  let jwk = (await loadKeys(teamDomain)).find(key => key.kid === header.kid && key.alg === 'RS256' && key.use === 'sig')
+  let keys: AccessJwk[]
+  try { keys = await loadKeys(teamDomain) }
+  catch { throw new ApiError(503, 'access_keys_unavailable', 'Kunci verifikasi Cloudflare Access sementara tidak tersedia.') }
+  let jwk = keys.find(key => key.kid === header.kid && key.alg === 'RS256' && key.use === 'sig')
   if (!jwk) {
     keyCache.delete(teamDomain)
-    jwk = (await loadKeys(teamDomain)).find(key => key.kid === header.kid && key.alg === 'RS256' && key.use === 'sig')
+    try { keys = await loadKeys(teamDomain) }
+    catch { throw new ApiError(503, 'access_keys_unavailable', 'Kunci verifikasi Cloudflare Access sementara tidak tersedia.') }
+    jwk = keys.find(key => key.kid === header.kid && key.alg === 'RS256' && key.use === 'sig')
   }
   if (!jwk) throw new ApiError(403, 'access_invalid', 'Kunci token Cloudflare Access tidak dikenal.')
-  const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify'])
-  const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key,
-    Uint8Array.from(atob(parts[2].replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(parts[2].length / 4) * 4, '=')), c => c.charCodeAt(0)),
-    new TextEncoder().encode(parts[0] + '.' + parts[1]))
+  let valid = false
+  try {
+    const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify'])
+    const signature = Uint8Array.from(atob(parts[2].replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(parts[2].length / 4) * 4, '=')), c => c.charCodeAt(0))
+    valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, signature, new TextEncoder().encode(parts[0] + '.' + parts[1]))
+  } catch { throw new ApiError(403, 'access_invalid', 'Tanda tangan token Cloudflare Access tidak valid.') }
   const now = Math.floor(Date.now() / 1000)
   const audiences = (Array.isArray(claims.aud) ? claims.aud : [claims.aud]).filter((value): value is string => typeof value === 'string')
   if (!valid || claims.iss !== 'https://' + teamDomain || !audiences.some(audience => audiencesAllowed.includes(audience)) ||
-      !claims.sub || !claims.exp || claims.exp <= now || (claims.nbf !== undefined && claims.nbf > now + 30)) {
+      typeof claims.sub !== 'string' || !claims.sub || typeof claims.exp !== 'number' || claims.exp <= now ||
+      (claims.nbf !== undefined && (typeof claims.nbf !== 'number' || claims.nbf > now + 30))) {
     throw new ApiError(403, 'access_invalid', 'Token Cloudflare Access tidak valid, kedaluwarsa, atau bukan untuk aplikasi admin ini.')
   }
 }
