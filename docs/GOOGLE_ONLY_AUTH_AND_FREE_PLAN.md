@@ -21,10 +21,10 @@ The code rejects Clerk users that do not have a linked Google external account, 
 ## Cloudflare configuration
 Required Worker variables/secrets: CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY (secret), CLERK_JWT_PUBLIC_KEY, CLERK_AUTHORIZED_PARTIES, and recommended exact CLERK_ISSUER.
 
-Apply migration 0009_account_free_plan.sql to the target D1 database before enabling the updated Worker. Do not enable Clerk in production before migration is applied.
+Apply migration 0009_free_customer_plan.sql to the target D1 database before enabling the updated Worker. Do not enable Clerk in production before migration is applied.
 
 ## Free plan semantics
-The Free plan is stored in account_plans and is assigned to existing users by migration and to newly provisioned Google users during first authenticated request. It is an account tier, not a paid order. The current implementation does not claim an enforced AI-run quota. Do not advertise a monthly generation/run limit until server-side metering and enforcement have been implemented and tested.
+The Free plan is stored directly on users as plan_tier, plan_status, and plan_started_at. Migration 0009_free_customer_plan.sql assigns Free to existing accounts; new Google accounts receive the same fields during provisioning. It is an account tier, not a paid order. The current implementation does not claim an enforced AI-run quota. Do not advertise a monthly generation/run limit until server-side metering and enforcement have been implemented and tested.
 
 ## Rollout checklist
 - Apply migration locally and in staging first.
