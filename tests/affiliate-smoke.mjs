@@ -103,6 +103,12 @@ r = await B('POST', `${AF}/workspaces/${wsB}/products`, { title: 'B prod', canon
 r = await B('POST', `${AF}/products/${pB}/experiments`, { experiment_id: exp, channel_id: ch }); ok(r.s === 400, 'B cannot link A experiment/channel to B product')
 r = await B('POST', `${AF}/products/${pB}/evidence`, { evidence_item_id: ev, relationship: 'supports' }); ok(r.s === 400, 'B cannot link A evidence to B product')
 
+console.log('Agent Runtime tool registry boundaries')
+r = await A('GET', AF + '/agent/tools?workspace_id=' + encodeURIComponent(ws)); ok(r.s === 200 && r.j.tools.some((t) => t.id === 'workspace.get_summary' && t.enabled), 'owner can inspect enabled read-only agent tools')
+ok(r.j.tools.some((t) => t.id === 'provider.actor.run' && !t.enabled) && r.j.tools.some((t) => t.id === 'publication.publish' && !t.enabled), 'paid Actor and publishing tools are disabled')
+r = await B('GET', AF + '/agent/tools?workspace_id=' + encodeURIComponent(ws)); ok(r.s === 404, 'other user cannot inspect tools for foreign workspace')
+r = await A('GET', AF + '/agent/tools'); ok(r.s === 400, 'tool registry requires explicit workspace scope')
+
 console.log('Agent Live Chat workspace boundaries')
 r = await A('GET', AF + '/agent/conversations?workspace_id=' + encodeURIComponent(ws)); ok(r.s === 200 && Array.isArray(r.j.conversations), 'owner can list own workspace agent conversations')
 r = await B('GET', AF + '/agent/conversations?workspace_id=' + encodeURIComponent(ws)); ok(r.s === 404, 'other user cannot list agent conversations in foreign workspace')
