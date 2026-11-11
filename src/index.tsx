@@ -53,7 +53,7 @@ const affiliateShell=`<!doctype html><html lang="id"><head><meta charset="utf-8"
     <li>Status <strong>terkonfigurasi</strong> bukan berarti API key sudah tervalidasi. Groq/Tavily perlu uji request; Actor perlu persetujuan setiap eksekusi.</li>
     <li>Apify/Scrape.ly bisa memakai kredit atau saldo. Allowlist Actor bukan batas biaya. Periksa harga Actor dan usage dashboard sebelum menekan eksekusi.</li>
     <li>Biaya/token aktual tidak bisa dihitung oleh OLTAVYN saat ini. Panel menampilkan jumlah panggilan audit, bukan saldo atau tagihan.</li>
-    <li>Scrape.ly tetap terkunci sampai base URL dan pola endpoint run resmi ditinjau dan dikonfigurasi oleh operator.</li>
+    <li>Scrape.ly memakai endpoint resmi v2; tetap nonaktif sampai secret dan Actor allowlist disiapkan.</li>
   </ul>
 </div>
 <div class="cols">
@@ -77,15 +77,17 @@ const affiliateShell=`<!doctype html><html lang="id"><head><meta charset="utf-8"
     <form id="apify-form">
       <div class="field"><label for="a-actor">Actor ID (harus sudah diizinkan)</label><input id="a-actor" name="actor_id" required maxlength="180" placeholder="username/actor-name"></div>
       <div class="field"><label for="a-input">Input Actor (JSON object)</label><textarea id="a-input" name="input_json" rows="5" maxlength="20000" placeholder='{"startUrls":[{"url":"https://example.com"}]}'></textarea></div>
+      <div class="grid"><div class="field"><label for="a-cap">Batas biaya maksimum (USD)</label><input id="a-cap" name="max_total_charge_usd" type="number" min="0.01" max="1" step="0.01" value="0.05" required></div><div class="field"><label for="a-items">Batas item berbayar</label><input id="a-items" name="max_items" type="number" min="1" max="100" step="1" value="10" required></div><div class="field"><label for="a-timeout">Timeout (detik)</label><input id="a-timeout" name="timeout_seconds" type="number" min="1" max="120" step="1" value="60" required></div></div>
       <label class="check"><input id="a-confirm" type="checkbox" required> Saya sudah memeriksa Actor, sumber, terms, batas, dan potensi biayanya; saya menyetujui satu eksekusi ini.</label>
       <button class="btn" type="submit" disabled>Jalankan satu Actor</button>
     </form><pre id="apify-result" aria-live="polite">Menunggu konfigurasi dan allowlist…</pre>
   </div>
   <div class="card">
-    <h3>Scrape.ly · Actor execution</h3><p class="small muted">Integrasi dikunci secara default. Aktif hanya setelah endpoint resmi, autentikasi, input, dan skema harga diverifikasi.</p>
+    <h3>Scrape.ly · Actor execution</h3><p class="small muted">API resmi Scrape.ly v2. Tetap memerlukan secret, Actor allowlist, persetujuan per-run, dan batas biaya maksimum.</p>
     <form id="scrapely-form">
       <div class="field"><label for="s-actor">Actor / task ID yang diizinkan</label><input id="s-actor" name="actor_id" required maxlength="180" placeholder="ID dari dashboard Scrape.ly"></div>
       <div class="field"><label for="s-input">Input JSON object</label><textarea id="s-input" name="input_json" rows="5" maxlength="20000" placeholder="{}"></textarea></div>
+      <div class="grid"><div class="field"><label for="s-cap">Batas biaya maksimum (USD)</label><input id="s-cap" name="max_total_charge_usd" type="number" min="0.01" max="1" step="0.01" value="0.05" required></div><div class="field"><label for="s-items">Batas item berbayar</label><input id="s-items" name="max_items" type="number" min="1" max="100" step="1" value="10" required></div><div class="field"><label for="s-timeout">Timeout (detik)</label><input id="s-timeout" name="timeout_seconds" type="number" min="1" max="120" step="1" value="60" required></div></div>
       <label class="check"><input id="s-confirm" type="checkbox" required> Saya menyetujui satu eksekusi setelah memeriksa biaya dan hak akses.</label>
       <button class="btn" type="submit" disabled>Jalankan satu task</button>
     </form><pre id="scrapely-result" aria-live="polite">Dikunci sampai endpoint resmi diverifikasi.</pre>
