@@ -57,7 +57,7 @@ async function resolveClerkUser(c: any, claims: any) {
       await audit(c.env.DB,{actor_user_id:id,action:'user.register.google',resource_type:'user',resource_id:id})
     }
   }
-  await c.env.DB.prepare("INSERT OR IGNORE INTO account_plans (user_id,plan_code,status,monthly_agent_runs,started_at,created_at,updated_at) VALUES (?,'free','active',10,?,?,?)")
+  await c.env.DB.prepare("INSERT OR IGNORE INTO account_plans (user_id,plan_code,status,started_at,created_at,updated_at) VALUES (?,'free','active',?,?,?)")
     .bind(user.id,nowIso(),nowIso(),nowIso()).run()
   return user
 }
@@ -98,5 +98,7 @@ auth.post('/logout', async (c) => {
 auth.get('/me', async (c, next) => {
   if (!getCookie(c, COOKIE) && !getCookie(c, '__session')) return c.json({ user: null })
   try { await requireAuth(c, next) } catch { return c.json({ user: null }) }
-  return c.json({ user: c.get('user') })
+  const user=c.get('user')
+  const plan=await c.env.DB.prepare("SELECT plan_code,status,started_at FROM account_plans WHERE user_id=?").bind(user.id).first<any>()
+  return c.json({ user: { ...user, plan_code: plan?.plan_code || 'free', plan_status: plan?.status || 'active', plan_started_at: plan?.started_at || null } })
 })
