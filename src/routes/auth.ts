@@ -12,20 +12,27 @@ function decodeJwtPart(value: string) { return JSON.parse(new TextDecoder().deco
 async function verifyClerkToken(token: string, c: any) {
   const pem=c.env.CLERK_JWT_PUBLIC_KEY as string
   if (!pem) throw new ApiError(503,'clerk_not_configured','Kunci verifikasi Clerk belum dipasang.')
+  if(token.length>16_384) throw new ApiError(401,'invalid_session','Sesi Clerk tidak valid.')
   const parts=token.split('.')
   if(parts.length!==3) throw new ApiError(401,'invalid_session','Sesi Clerk tidak valid.')
-  const header=decodeJwtPart(parts[0]), claims=decodeJwtPart(parts[1])
+  let header:any, claims:any, valid=false
+  try { header=decodeJwtPart(parts[0]); claims=decodeJwtPart(parts[1]) }
+  catch { throw new ApiError(401,'invalid_session','Sesi Clerk tidak valid.') }
   if(header.alg!=='RS256') throw new ApiError(401,'invalid_session','Algoritma token Clerk tidak diizinkan.')
-  const keyBytes=Uint8Array.from(atob(pem.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\s/g,'')),ch=>ch.charCodeAt(0))
-  const key=await crypto.subtle.importKey('spki',keyBytes,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['verify'])
-  const valid=await crypto.subtle.verify('RSASSA-PKCS1-v1_5',key,b64urlBytes(parts[2]),new TextEncoder().encode(parts[0]+'.'+parts[1]))
+  try {
+    const keyBytes=Uint8Array.from(atob(pem.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\\s/g,'')),ch=>ch.charCodeAt(0))
+    const key=await crypto.subtle.importKey('spki',keyBytes,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['verify'])
+    valid=await crypto.subtle.verify('RSASSA-PKCS1-v1_5',key,b64urlBytes(parts[2]),new TextEncoder().encode(parts[0]+'.'+parts[1]))
+  } catch { throw new ApiError(401,'invalid_session','Tanda tangan sesi Clerk tidak valid.') }
   const now=Math.floor(Date.now()/1000), origin=new URL(c.req.url).origin
   const allowed=(c.env.CLERK_AUTHORIZED_PARTIES||origin).split(',').map((x:string)=>x.trim()).filter(Boolean)
-  if(!valid || !claims.sub || !claims.exp || claims.exp<=now || (claims.nbf && claims.nbf>now+30) ||
-     (c.env.CLERK_ISSUER && claims.iss!==c.env.CLERK_ISSUER) || !claims.azp || !allowed.includes(claims.azp))
+  if(!valid || typeof claims.sub!=='string' || !claims.sub || typeof claims.exp!=='number' || claims.exp<=now ||
+     (claims.nbf!==undefined && (typeof claims.nbf!=='number' || claims.nbf>now+30)) ||
+     (c.env.CLERK_ISSUER && claims.iss!==c.env.CLERK_ISSUER) || typeof claims.azp!=='string' || !allowed.includes(claims.azp))
     throw new ApiError(401,'invalid_session','Sesi Clerk tidak valid atau telah kedaluwarsa.')
   return claims
 }
+
 async function resolveClerkUser(c: any, claims: any) {
   // Once a Google identity is linked, use the internal user mapping on subsequent requests.
   // Google is the only enabled Clerk provider; first-time provisioning validates the provider below.
