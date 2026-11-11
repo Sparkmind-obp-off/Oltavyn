@@ -315,6 +315,7 @@ affiliateApi.get('/agent/tools', async (c) => {
 affiliateApi.post('/agent/runs', async (c) => {
   const d = await json(c)
   const ws = await workspace(c, text(d.workspace_id, 100))
+  if (c.get('user').plan_code === 'free_starter') await rateLimit(c.env.DB, `free-agent-runs:${uid(c)}`, 20, 86400)
   const intent = text(d.intent, 240)
   const key = text(d.idempotency_key, 120)
   if (!intent || !key) throw new ApiError(400, 'run_fields_required', 'Intent dan idempotency_key wajib diisi.')
@@ -414,6 +415,7 @@ affiliateApi.post('/agent/chat', async (c) => {
   const message = text(d.message, 6000)
   if (!message) throw new ApiError(400, 'message_required', 'Tulis pesan terlebih dahulu.')
   await rateLimit(c.env.DB, `agent-chat:${uid(c)}`, 40, 3600)
+  if (c.get('user').plan_code === 'free_starter') await rateLimit(c.env.DB, `free-ai-daily:${uid(c)}`, 5, 86400)
   let conversationId = text(d.conversation_id, 100)
   if (conversationId) {
     const owned = await c.env.DB.prepare('SELECT id FROM agent_conversations WHERE id=? AND workspace_id=? AND user_id=?').bind(conversationId, ws.id, uid(c)).first<any>()
@@ -441,6 +443,7 @@ affiliateApi.post('/agent/chat', async (c) => {
   let research: any = null
   let researchError: string | null = null
   const useTavily = d.use_tavily === true
+  if (useTavily && c.get('user').plan_code === 'free_starter') throw new ApiError(403, 'plan_upgrade_required', 'Riset web eksternal belum termasuk Free Starter. Upgrade paket untuk menggunakan Tavily.')
   if (useTavily) {
     try { research = await providerCall(c, 'tavily', 10, () => tavilySearch(penv(c), fetch, { query: message.slice(0, 400) })) }
     catch (e) { researchError = e instanceof Error ? e.message : 'Riset Tavily tidak tersedia.' }
@@ -607,7 +610,23 @@ affiliateApi.get('/providers/usage', async (c) => {
   for (const row of results as any[]) if (row.provider in usage) usage[row.provider] = { calls_30d: Number(row.calls_30d) || 0, last_called_at: row.last_called_at || null }
   return c.json({ window_days: 30, usage, cost_tracking: 'unavailable', note: 'Jumlah panggilan dihitung dari audit log. Biaya, kredit, dan token aktual tetap harus diperiksa di dashboard provider.' })
 })
-affiliateApi.post('/providers/groq/generate', async (c) => { const d = await json(c); return c.json(await providerCall(c, 'groq', 20, () => groqGenerate(penv(c), fetch, d))) })
-affiliateApi.post('/providers/tavily/search', async (c) => { const d = await json(c); return c.json(await providerCall(c, 'tavily', 20, () => tavilySearch(penv(c), fetch, d))) })
-affiliateApi.post('/providers/apify/run', async (c) => { const d = await json(c); return c.json(await providerCall(c, 'apify', 2, () => runActor(penv(c), fetch, 'apify', d)), 202) })
-affiliateApi.post('/providers/scrapely/run', async (c) => { const d = await json(c); return c.json(await providerCall(c, 'scrapely', 2, () => runActor(penv(c), fetch, 'scrapely', d)), 202) })
+affiliateApi.post('/providers/groq/generate', async (c) => {
+  if (c.get('user').plan_code === 'free_starter') await rateLimit(c.env.DB, `free-ai-daily:${uid(c)}`, 5, 86400)
+  const d = await json(c)
+  return c.json(await providerCall(c, 'groq', 20, () => groqGenerate(penv(c), fetch, d)))
+})
+affiliateApi.post('/providers/tavily/search', async (c) => {
+  if (c.get('user').plan_code === 'free_starter') throw new ApiError(403, 'plan_upgrade_required', 'Tavily tidak termasuk Free Starter.')
+  const d = await json(c)
+  return c.json(await providerCall(c, 'tavily', 20, () => tavilySearch(penv(c), fetch, d)))
+})
+affiliateApi.post('/providers/apify/run', async (c) => {
+  if (c.get('user').plan_code === 'free_starter') throw new ApiError(403, 'plan_upgrade_required', 'Eksekusi Actor berbayar tidak termasuk Free Starter.')
+  const d = await json(c)
+  return c.json(await providerCall(c, 'apify', 2, () => runActor(penv(c), fetch, 'apify', d)), 202)
+})
+affiliateApi.post('/providers/scrapely/run', async (c) => {
+  if (c.get('user').plan_code === 'free_starter') throw new ApiError(403, 'plan_upgrade_required', 'Eksekusi Scrape.ly tidak termasuk Free Starter.')
+  const d = await json(c)
+  return c.json(await providerCall(c, 'scrapely', 2, () => runActor(penv(c), fetch, 'scrapely', d)), 202)
+})
