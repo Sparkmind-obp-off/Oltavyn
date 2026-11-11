@@ -189,3 +189,12 @@ dialog::backdrop { background: rgba(20,25,40,.45); }
 .package-card summary{cursor:pointer;font-weight:600}
 .order-item{margin-top:10px}
 @media(max-width:960px){.grid-3{grid-template-columns:1fr}}
+
+.onboarding-wrap{max-width:1120px;margin:0 auto}
+.onboarding-progress{display:flex;align-items:center;gap:10px;margin:8px 0 18px}
+.onboarding-grid{align-items:start}
+.onboarding-list{padding-left:1.25rem;margin:18px 0}
+.onboarding-list li{padding:0 0 14px 4px}
+.onboarding-list li strong,.onboarding-list li span{display:block}
+.onboarding-list li span{font-size:.88rem;margin-top:2px}
+@media(max-width:960px){.onboarding-grid{grid-template-columns:1fr}}
