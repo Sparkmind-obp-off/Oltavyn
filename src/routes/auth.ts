@@ -1,6 +1,6 @@
 import { Hono, type MiddlewareHandler } from 'hono'
 import { getCookie, deleteCookie } from 'hono/cookie'
-import { ApiError, AppEnv, audit, hashPassword, newId, nowIso, randomToken, rateLimit, sha256Hex } from '../lib/core'
+import { ApiError, AppEnv, PBKDF2_ITERATIONS, audit, hashPassword, newId, nowIso, randomToken, rateLimit, sha256Hex } from '../lib/core'
 
 const COOKIE = 'olt_session'
 
@@ -67,12 +67,13 @@ async function resolveClerkUser(c: any, claims: any) {
       const id = newId('usr'), salt = randomToken(16)
       const dummy = await hashPassword(randomToken(32), salt)
       await c.env.DB.prepare("INSERT INTO users (id, email, display_name, password_hash, password_salt, password_iterations, status, created_at, clerk_user_id) VALUES (?,?,?,?,?,?, 'active',?,?)")
-        .bind(id, email, display, dummy, salt, 100000, nowIso(), claims.sub).run()
+        .bind(id, email, display, dummy, salt, PBKDF2_ITERATIONS, nowIso(), claims.sub).run()
       user = { id, email, display_name: display }
       await audit(c.env.DB, { actor_user_id: id, action: 'user.register.google', resource_type: 'user', resource_id: id })
     }
   }
   const plan = await ensureFreeStarter(c.env.DB, user.id)
+  if (plan?.status !== 'active') throw new ApiError(403, 'plan_suspended', 'Akses paket akun sedang ditangguhkan. Hubungi dukungan OLTAVYN.')
   return { ...user, plan_code: plan?.plan_code || 'free_starter', plan_label: 'Free Starter', plan_status: plan?.status || 'active' }
 }
 
