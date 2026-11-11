@@ -7,6 +7,7 @@ type DuitkuEnv = {
   DUITKU_API_KEY?: string
   DUITKU_BASE_URL?: string
   PUBLIC_APP_URL?: string
+  DUITKU_CHECKOUT_ENABLED?: string
 }
 const api = new Hono<AppEnv>()
 const clean = (v: unknown, max = 300) => typeof v === 'string' ? v.trim().slice(0, max) : ''
@@ -17,6 +18,7 @@ async function hmacHex(secret: string, value: string) {
   return hex(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(value)))
 }
 function duitkuConfig(env: DuitkuEnv) {
+  if (env.DUITKU_CHECKOUT_ENABLED !== 'true') throw new ApiError(503,'checkout_disabled','Checkout Duitku belum diaktifkan oleh administrator.')
   if (!env.DUITKU_MERCHANT_CODE || !env.DUITKU_API_KEY) throw new ApiError(503,'duitku_not_configured','Duitku belum dikonfigurasi di Cloudflare Secrets.')
   const base = (env.DUITKU_BASE_URL || 'https://api-sandbox.duitku.com').replace(/\/$/,'')
   if (!['https://api-sandbox.duitku.com','https://api-prod.duitku.com'].includes(base)) throw new ApiError(503,'duitku_base_url_invalid','Base URL Duitku tidak diizinkan.')
