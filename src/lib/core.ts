@@ -1,6 +1,6 @@
 // Shared primitives: types, ids, time, crypto (Web Crypto only), validation, errors.
 
-export type Bindings = { DB: D1Database; CLERK_PUBLISHABLE_KEY?: string; CLERK_JWT_PUBLIC_KEY?: string; CLERK_SECRET_KEY?: string; CLERK_AUTHORIZED_PARTIES?: string; CLERK_ISSUER?: string }
+export type Bindings = { DB: D1Database; CLERK_PUBLISHABLE_KEY?: string; CLERK_JWT_PUBLIC_KEY?: string; CLERK_SECRET_KEY?: string; CLERK_AUTHORIZED_PARTIES?: string; CLERK_ISSUER?: string; OLTAVYN_ADMIN_EMAILS?: string }
 export type User = { id: string; email: string; display_name: string | null }
 export type AppEnv = { Bindings: Bindings; Variables: { user: User } }
 
