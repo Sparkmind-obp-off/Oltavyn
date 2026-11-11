@@ -17,6 +17,24 @@ function client() {
     return { s: r.status, j }
   }
 }
+// Google-only authentication contract. Legacy password-based integration fixtures are intentionally retired.
+const authConfig = await fetch(BASE + '/api/auth/config').then(r => r.json()).catch(() => null)
+if (authConfig?.auth_mode === 'google_only') {
+  console.log('Google-only auth contract')
+  let r = await anon('GET', '/workspaces')
+  ok(r.s === 401, 'unauthenticated private request denied')
+  r = await anon('POST', '/auth/register', { email: 'legacy@example.test', password: 'password123' })
+  ok(r.s === 410, 'legacy email/password registration permanently disabled')
+  r = await anon('POST', '/auth/login', { email: 'legacy@example.test', password: 'password123' })
+  ok(r.s === 410, 'legacy email/password login permanently disabled')
+  r = await anon('GET', '/auth/me')
+  ok(r.s === 200 && r.j?.user === null, 'anonymous session probe returns null user')
+  r = await anon('GET', '/public/catalog')
+  ok(r.s === 200 && Array.isArray(r.j?.catalog), 'public service catalog remains accessible')
+  console.log(`\n${pass} passed, ${fail} failed. Authenticated Google end-to-end tests require a separately provisioned Clerk test identity and are not simulated by this smoke test.`)
+  process.exit(fail ? 1 : 0)
+}
+
 const rnd = Math.random().toString(36).slice(2, 8)
 const A = client(), B = client(), anon = client()
 
