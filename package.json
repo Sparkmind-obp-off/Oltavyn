@@ -7,14 +7,15 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "dev:sandbox": "wrangler pages dev dist --ip 0.0.0.0 --port 3000",
-    "db:migrate:local": "wrangler d1 migrations apply oltavyn-production --local",
-    "db:migrate:prod": "wrangler d1 migrations apply oltavyn-production --remote",
+    "db:migrate:local": "wrangler d1 migrations apply oltavyn-preview --local",
+    "db:migrate:preview": "wrangler d1 migrations apply oltavyn-preview --remote",
+    "db:migrate:prod": "wrangler d1 migrations apply oltavyn-production --remote --env production",
     "db:reset:local": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local",
     "test:smoke": "node tests/smoke.mjs",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name oltavyn",
     "test:affiliate": "node tests/affiliate-smoke.mjs",
     "test:providers": "esbuild tests/providers.test.ts --bundle --platform=node --format=esm --log-level=warning --outfile=.tmp/providers.test.mjs && node .tmp/providers.test.mjs",
-    "test:all": "npm run test:providers && npm run test:smoke && npm run test:affiliate"
+    "test:all": "npm run typecheck && npm run build && npm run db:migrate:local && npm run test:providers && npm run test:smoke && npm run test:affiliate",
+    "deploy:preview": "npm run build && wrangler pages deploy dist --project-name oltavyn --branch feat/faceless-affiliate-factory-phase1"
   },
   "dependencies": {
     "hono": "^4.6.0"
