@@ -40,7 +40,7 @@ async function resolveClerkUser(c: any, claims: any) {
     throw new ApiError(403,'verified_google_email_required','Akun Google harus memiliki email utama terverifikasi.')
   const email=String(primary.email_address).toLowerCase()
   const display=[profile.first_name,profile.last_name].filter(Boolean).join(' ').slice(0,80)||null
-  let user=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first<any>()
+  let user=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status,plan_started_at FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first<any>()
   if(!user) {
     const existing=await c.env.DB.prepare('SELECT id,clerk_user_id,status FROM users WHERE email=?').bind(email).first<any>()
     if(existing) {
@@ -56,8 +56,6 @@ async function resolveClerkUser(c: any, claims: any) {
       await audit(c.env.DB,{actor_user_id:id,action:'user.register.google',resource_type:'user',resource_id:id})
     }
   }
-  await c.env.DB.prepare("INSERT OR IGNORE INTO account_plans (user_id,plan_code,status,started_at,created_at,updated_at) VALUES (?,'free','active',?,?,?)")
-    .bind(user.id,nowIso(),nowIso(),nowIso()).run()
   return user
 }
 
@@ -101,6 +99,5 @@ auth.get('/me', async (c, next) => {
   if (!getCookie(c, COOKIE) && !getCookie(c, '__session')) return c.json({ user: null })
   try { await requireAuth(c, next) } catch { return c.json({ user: null }) }
   const user=c.get('user')
-  const plan=await c.env.DB.prepare("SELECT plan_code,status,started_at FROM account_plans WHERE user_id=?").bind(user.id).first<any>()
-  return c.json({ user: { ...user, plan_code: plan?.plan_code || 'free', plan_status: plan?.status || 'active', plan_started_at: plan?.started_at || null } })
+  return c.json({ user })
 })
