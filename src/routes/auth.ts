@@ -1,10 +1,8 @@
 import { Hono, type MiddlewareHandler } from 'hono'
-import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
+import { getCookie, deleteCookie } from 'hono/cookie'
 import { ApiError, AppEnv, PBKDF2_ITERATIONS, audit, hashPassword, newId, nowIso, randomToken, sha256Hex } from '../lib/core'
 
 const COOKIE = 'olt_session'
-
-const clientKey = (c: any) => c.req.header('cf-connecting-ip') || 'local'
 
 function b64urlBytes(value: string) {
   const normalized=value.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(value.length/4)*4,'=')
