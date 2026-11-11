@@ -50,10 +50,18 @@ async function resolveClerkUser(c: any, claims: any) {
     return {id:existing.id,email,display_name:display,plan_tier:existing.plan_tier||'free',plan_status:existing.plan_status||'active',plan_started_at:existing.plan_started_at||nowIso()}
   }
   const id=newId('usr'),salt=randomToken(16),dummy=await hashPassword(randomToken(32),salt),created=nowIso()
-  await c.env.DB.prepare("INSERT INTO users (id,email,display_name,password_hash,password_salt,password_iterations,status,created_at,clerk_user_id,plan_started_at) VALUES (?,?,?,?,?,?, 'active',?,?,?)")
+  // OR IGNORE makes first-login provisioning idempotent under concurrent /auth/me requests.
+  await c.env.DB.prepare("INSERT OR IGNORE INTO users (id,email,display_name,password_hash,password_salt,password_iterations,status,created_at,clerk_user_id,plan_started_at) VALUES (?,?,?,?,?,?, 'active',?,?,?)")
     .bind(id,email,display,dummy,salt,PBKDF2_ITERATIONS,created,claims.sub,created).run()
-  await audit(c.env.DB,{actor_user_id:id,action:'user.register.google',resource_type:'user',resource_id:id})
-  return {id,email,display_name:display,plan_tier:'free',plan_status:'active',plan_started_at:created}
+  const provisioned=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status,plan_started_at FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first<any>()
+  if(provisioned) {
+    await audit(c.env.DB,{actor_user_id:provisioned.id,action:'user.register.google',resource_type:'user',resource_id:provisioned.id})
+    return provisioned
+  }
+  const conflict=await c.env.DB.prepare("SELECT id,status,clerk_user_id FROM users WHERE email=?").bind(email).first<any>()
+  if(conflict?.status!=='active') throw new ApiError(403,'account_disabled','Akun OLTAVYN ini tidak aktif. Hubungi dukungan.')
+  if(conflict?.clerk_user_id && conflict.clerk_user_id!==claims.sub) throw new ApiError(409,'identity_conflict','Email sudah terhubung ke identitas lain.')
+  throw new ApiError(409,'identity_provisioning_conflict','Akun sedang dibuat pada permintaan lain. Silakan coba masuk kembali.')
 }
 
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
