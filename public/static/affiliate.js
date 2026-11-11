@@ -345,7 +345,7 @@ async function boot() {
     const saved = localStorage.getItem('olt_ws')
     state.ws = workspaces.some((w) => w.id === saved) ? saved : workspaces[0].id
     $('#workspace').innerHTML = workspaces.map((w) => `<option value="${esc(w.id)}" ${w.id === state.ws ? 'selected' : ''}>${esc(w.name)}</option>`).join('')
-    $('#workspace').onchange = () => { state.ws = $('#workspace').value; localStorage.setItem('olt_ws', state.ws); state.productId = null; setTab(state.tab === 'detail' ? 'products' : state.tab) }
+    $('#workspace').onchange = () => { state.ws = $('#workspace').value; localStorage.setItem('olt_ws', state.ws); state.productId = null; state.agentConversationId = null; setTab(state.tab === 'detail' ? 'products' : state.tab) }
     setTab('overview')
   } catch (e) { show(e.message, true) }
 }
