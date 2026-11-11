@@ -1,0 +1,22 @@
+diff --git a/.github/workflows/verify.yml b/.github/workflows/verify.yml
+index ad59bdc..332041f 100644
+--- a/.github/workflows/verify.yml
++++ b/.github/workflows/verify.yml
+@@ -21,6 +21,8 @@ jobs:
+       - run: npm ci
+       - name: Typecheck
+         run: npm run typecheck
++      - name: Provider adapter tests (mocked, no network)
++        run: npm run test:providers
+       - name: Build
+         run: npm run build
+       - name: Apply migrations to ephemeral local D1
+@@ -37,6 +39,8 @@ jobs:
+           exit 1
+       - name: Smoke and workspace-isolation tests
+         run: npm run test:smoke
++      - name: Affiliate OS smoke and isolation tests
++        run: npm run test:affiliate
+       - name: Stop local Pages server
+         if: always()
+         run: if [ -f /tmp/oltavyn-pages.pid ]; then kill "$(cat /tmp/oltavyn-pages.pid)" || true; fi

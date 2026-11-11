@@ -143,6 +143,8 @@ The Phase 1 changes are being prepared on branch `feat/faceless-affiliate-factor
 - **Provider integrations:** [docs/PROVIDER_INTEGRATIONS.md](docs/PROVIDER_INTEGRATIONS.md) — Groq, Tavily, Apify, and Scrape.ly setup, costs, and safety.
 - **Implementation and release gates:** [docs/affiliate-factory/PHASE_2_STATUS.md](docs/affiliate-factory/PHASE_2_STATUS.md).
 
+**Phase 3 status:** see [docs/affiliate-factory/IMPLEMENTATION_REPORT.md](docs/affiliate-factory/IMPLEMENTATION_REPORT.md) — API reference, data model, scorecard, content factory, provider/cost matrix, threat notes, QA results and Indonesian operator guide. Tests: `npm run test:providers` (mocked), `npm run test:smoke`, `npm run test:affiliate` (set `BASE_URL`).
+
 The Affiliate OS workbench and provider adapters currently exist on the feature branch only. They are not live on `oltavyn.pages.dev` until this PR is verified, merged, and separately deployed. No provider credentials are configured by this repository.
 
 

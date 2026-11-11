@@ -448,6 +448,13 @@ api.get('/workspaces/:id/export', async (c) => {
     experiments: await all('SELECT * FROM experiments WHERE workspace_id = ?'),
     observations: await all('SELECT o.* FROM observations o JOIN experiments e ON e.id = o.experiment_id WHERE e.workspace_id = ?'),
     audit_events: await all('SELECT id, action, resource_type, resource_id, outcome, created_at FROM audit_events WHERE workspace_id = ?'),
+    affiliate_channels: await all('SELECT * FROM affiliate_channels WHERE workspace_id = ?'),
+    affiliate_products: await all('SELECT * FROM affiliate_products WHERE workspace_id = ?'),
+    affiliate_product_evidence: await all('SELECT pe.* FROM affiliate_product_evidence pe JOIN affiliate_products p ON p.id = pe.product_id WHERE p.workspace_id = ?'),
+    affiliate_product_scorecards: await all('SELECT s.* FROM affiliate_product_scorecards s JOIN affiliate_products p ON p.id = s.product_id WHERE p.workspace_id = ?'),
+    affiliate_content_packages: await all('SELECT * FROM affiliate_content_packages WHERE workspace_id = ?'),
+    // Private affiliate tracking URLs are never exported; only their presence.
+    affiliate_experiment_products: await all('SELECT x.experiment_id, x.product_id, x.channel_id, CASE WHEN x.affiliate_url IS NULL THEN 0 ELSE 1 END AS has_affiliate_url, x.created_at FROM affiliate_experiment_products x JOIN affiliate_products p ON p.id = x.product_id WHERE p.workspace_id = ?'),
   }
   await audit(c.env.DB, { workspace_id: ws.id, actor_user_id: c.get('user').id, action: 'workspace.export', resource_type: 'workspace', resource_id: ws.id })
   c.header('Content-Disposition', `attachment; filename="oltavyn-${ws.id}.json"`)
@@ -460,6 +467,12 @@ api.delete('/workspaces/:id', async (c) => {
   if (c.req.query('confirm') !== ws.name) throw new ApiError(400, 'confirmation_required', 'Ketik nama workspace persis untuk mengonfirmasi penghapusan.')
   const id = ws.id
   await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM affiliate_experiment_products WHERE product_id IN (SELECT id FROM affiliate_products WHERE workspace_id = ?)').bind(id),
+    c.env.DB.prepare('DELETE FROM affiliate_content_packages WHERE workspace_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM affiliate_product_scorecards WHERE product_id IN (SELECT id FROM affiliate_products WHERE workspace_id = ?)').bind(id),
+    c.env.DB.prepare('DELETE FROM affiliate_product_evidence WHERE product_id IN (SELECT id FROM affiliate_products WHERE workspace_id = ?)').bind(id),
+    c.env.DB.prepare('DELETE FROM affiliate_products WHERE workspace_id = ?').bind(id),
+    c.env.DB.prepare('DELETE FROM affiliate_channels WHERE workspace_id = ?').bind(id),
     c.env.DB.prepare('DELETE FROM observations WHERE experiment_id IN (SELECT id FROM experiments WHERE workspace_id = ?)').bind(id),
     c.env.DB.prepare('DELETE FROM experiments WHERE workspace_id = ?').bind(id),
     c.env.DB.prepare('DELETE FROM approvals WHERE asset_version_id IN (SELECT v.id FROM content_versions v JOIN content_assets a ON a.id = v.asset_id WHERE a.workspace_id = ?)').bind(id),

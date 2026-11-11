@@ -11,7 +11,10 @@
     "db:migrate:prod": "wrangler d1 migrations apply oltavyn-production --remote",
     "db:reset:local": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local",
     "test:smoke": "node tests/smoke.mjs",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name oltavyn"
+    "deploy": "npm run build && wrangler pages deploy dist --project-name oltavyn",
+    "test:affiliate": "node tests/affiliate-smoke.mjs",
+    "test:providers": "esbuild tests/providers.test.ts --bundle --platform=node --format=esm --log-level=warning --outfile=.tmp/providers.test.mjs && node .tmp/providers.test.mjs",
+    "test:all": "npm run test:providers && npm run test:smoke && npm run test:affiliate"
   },
   "dependencies": {
     "hono": "^4.6.0"

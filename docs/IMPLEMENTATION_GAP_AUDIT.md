@@ -44,3 +44,7 @@ Scope: OLTAVYN Core Engine and Affiliate OS feature branch
 ## Audit update protocol
 
 For every row, record commit SHA, command/test, timestamp, result and evidence link. Never change a status to VERIFIED based only on code inspection or a successful GitHub push.
+
+## Update 2026-11-11 (Phase 3)
+
+All "BLOCKED pending execution" rows above were executed locally: typecheck pass, build pass, clean migration 0001→0003 pass, core smoke 44/44, affiliate smoke + isolation 65/65, provider mock tests 29/29, browser console 0 errors. Details and remaining gaps: `docs/affiliate-factory/IMPLEMENTATION_REPORT.md`. Provider credentials remain unconfigured and unvalidated.

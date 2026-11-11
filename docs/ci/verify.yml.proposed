@@ -1,0 +1,46 @@
+name: OLTAVYN verification
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, feat/faceless-affiliate-factory-phase1]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Provider adapter tests (mocked, no network)
+        run: npm run test:providers
+      - name: Build
+        run: npm run build
+      - name: Apply migrations to ephemeral local D1
+        run: npm run db:migrate:local
+      - name: Start local Pages server
+        run: |
+          npm run dev:sandbox > /tmp/oltavyn-pages.log 2>&1 &
+          echo $! > /tmp/oltavyn-pages.pid
+          for i in $(seq 1 30); do
+            if curl --fail http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/oltavyn-pages.log
+          exit 1
+      - name: Smoke and workspace-isolation tests
+        run: npm run test:smoke
+      - name: Affiliate OS smoke and isolation tests
+        run: npm run test:affiliate
+      - name: Stop local Pages server
+        if: always()
+        run: if [ -f /tmp/oltavyn-pages.pid ]; then kill "$(cat /tmp/oltavyn-pages.pid)" || true; fi
