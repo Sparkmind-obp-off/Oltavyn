@@ -310,6 +310,76 @@ affiliateApi.get('/agent/tools', async (c) => {
     note: 'Tool discovery only. Mutations, paid Actors and publishing remain disabled until their approval and execution flows are implemented.',
   })
 })
+// Execute a bounded, caller-supplied plan using only enabled R0 tools.
+affiliateApi.post('/agent/runs', async (c) => {
+  const d = await json(c)
+  const ws = await workspace(c, text(d.workspace_id, 100))
+  const intent = text(d.intent, 240)
+  const key = text(d.idempotency_key, 120)
+  if (!intent || !key) throw new ApiError(400, 'run_fields_required', 'Intent dan idempotency_key wajib diisi.')
+  if (!Array.isArray(d.steps) || d.steps.length < 1 || d.steps.length > 4) throw new ApiError(400, 'invalid_steps', 'Run harus berisi 1–4 langkah.')
+  const planned: Array<{ tool: typeof AGENT_TOOLS[number]; input: Record<string, unknown> }> = []
+  for (const raw of d.steps) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new ApiError(400, 'invalid_step', 'Format langkah tidak valid.')
+    const authorized = authorizeTool(text((raw as any).tool_id, 100), (raw as any).input ?? {})
+    if (!authorized.ok) throw new ApiError(403, authorized.error, 'Tool tidak diizinkan oleh policy runtime.')
+    planned.push({ tool: authorized.tool, input: authorized.input })
+  }
+  const planJson = safeJson(planned.map((p) => ({ tool_id: p.tool.id, version: p.tool.version, permission: p.tool.permission, input: p.input })))
+  const existing = await c.env.DB.prepare('SELECT id, state FROM agent_runs WHERE user_id=? AND workspace_id=? AND idempotency_key=?').bind(uid(c), ws.id, key).first<any>()
+  if (existing) return c.json({ run_id: existing.id, state: existing.state, idempotent_replay: true })
+  const runId = newId('run'), created = nowIso()
+  await c.env.DB.prepare('INSERT INTO agent_runs (id,workspace_id,user_id,intent,state,plan_json,policy_version,idempotency_key,created_at,updated_at) VALUES (?,?,?,? ,\'planned\',?,?,?, ?,?)')
+    .bind(runId, ws.id, uid(c), intent, planJson, AGENT_POLICY_VERSION, key, created, created).run()
+  await c.env.DB.prepare("UPDATE agent_runs SET state='running', updated_at=? WHERE id=?").bind(nowIso(), runId).run()
+  const outputs: Array<{ tool_id: string; output: unknown }> = []
+  try {
+    for (let i = 0; i < planned.length; i++) {
+      const item = planned[i], stepId = newId('step'), started = nowIso()
+      await c.env.DB.prepare("INSERT INTO agent_run_steps (id,run_id,step_index,tool_id,tool_version,permission_class,status,input_json,started_at,created_at) VALUES (?,?,?,?,?,?,'running',?,?,?)")
+        .bind(stepId, runId, i, item.tool.id, item.tool.version, item.tool.permission, safeJson(item.input), started, started).run()
+      let output: unknown
+      if (item.tool.id === 'workspace.get_summary') {
+        const [products, shortlisted, channels, activeChannels, evidence, assets, experiments] = await Promise.all([
+          c.env.DB.prepare("SELECT COUNT(*) n FROM affiliate_products WHERE workspace_id=? AND lifecycle_status<>'archived'").bind(ws.id).first<any>(),
+          c.env.DB.prepare("SELECT COUNT(*) n FROM affiliate_products WHERE workspace_id=? AND lifecycle_status IN ('shortlisted','selected')").bind(ws.id).first<any>(),
+          c.env.DB.prepare("SELECT COUNT(*) n FROM affiliate_channels WHERE workspace_id=? AND status<>'archived'").bind(ws.id).first<any>(),
+          c.env.DB.prepare("SELECT COUNT(*) n FROM affiliate_channels WHERE workspace_id=? AND status='active'").bind(ws.id).first<any>(),
+          c.env.DB.prepare("SELECT COUNT(*) n FROM evidence_items WHERE workspace_id=? AND status='active'").bind(ws.id).first<any>(),
+          c.env.DB.prepare("SELECT COUNT(*) n FROM content_assets WHERE workspace_id=?").bind(ws.id).first<any>(),
+          c.env.DB.prepare("SELECT COUNT(*) n FROM experiments WHERE workspace_id=?").bind(ws.id).first<any>(),
+        ])
+        output = { products: products?.n || 0, shortlisted: shortlisted?.n || 0, channels: channels?.n || 0, active_channels: activeChannels?.n || 0, evidence_items: evidence?.n || 0, content_assets: assets?.n || 0, experiments: experiments?.n || 0 }
+      } else if (item.tool.id === 'products.list') {
+        const status = typeof item.input.status === 'string' && PRODUCT_STATUSES.includes(item.input.status) ? item.input.status : null
+        const query = typeof item.input.query === 'string' ? item.input.query : ''
+        const where = ['workspace_id=?'], binds: unknown[] = [ws.id]
+        if (status) { where.push('lifecycle_status=?'); binds.push(status) } else where.push("lifecycle_status<>'archived'")
+        if (query) { where.push('(title LIKE ? OR category LIKE ?)'); binds.push('%'+query+'%', '%'+query+'%') }
+        const rows = await c.env.DB.prepare('SELECT id,title,category,price_amount,commission_rate_percent,evidence_state,lifecycle_status FROM affiliate_products WHERE '+where.join(' AND ')+' ORDER BY updated_at DESC LIMIT 50').bind(...binds).all()
+        output = { products: rows.results }
+      } else if (item.tool.id === 'channels.list') {
+        const rows = await c.env.DB.prepare("SELECT id,platform,channel_name,handle,status FROM affiliate_channels WHERE workspace_id=? AND status<>'archived' ORDER BY created_at DESC LIMIT 50").bind(ws.id).all()
+        output = { channels: rows.results }
+      } else if (item.tool.id === 'evidence.list') {
+        const rows = await c.env.DB.prepare("SELECT id,title,source_type,source_url,excerpt,observed_at,status FROM evidence_items WHERE workspace_id=? AND status='active' ORDER BY captured_at DESC LIMIT 50").bind(ws.id).all()
+        output = { evidence: rows.results }
+      } else {
+        throw new Error('executor_not_found')
+      }
+      await c.env.DB.prepare("UPDATE agent_run_steps SET status='completed',output_json=?,completed_at=? WHERE id=?").bind(safeJson(output), nowIso(), stepId).run()
+      outputs.push({ tool_id: item.tool.id, output })
+    }
+    const completed = nowIso()
+    await c.env.DB.prepare("UPDATE agent_runs SET state='completed',updated_at=? WHERE id=?").bind(completed, runId).run()
+    await audit(c.env.DB, { workspace_id: ws.id, actor_user_id: uid(c), action: 'agent.run.completed', resource_type: 'agent_run', resource_id: runId })
+    return c.json({ run_id: runId, state: 'completed', outputs, policy_version: AGENT_POLICY_VERSION }, 201)
+  } catch (e) {
+    await c.env.DB.prepare("UPDATE agent_runs SET state='failed',updated_at=? WHERE id=?").bind(nowIso(), runId).run()
+    await audit(c.env.DB, { workspace_id: ws.id, actor_user_id: uid(c), action: 'agent.run.failed', resource_type: 'agent_run', resource_id: runId, outcome: 'failed' })
+    throw e
+  }
+})
 affiliateApi.get('/agent/runs', async (c) => {
   const workspaceId = text(c.req.query('workspace_id'), 100)
   if (!workspaceId) throw new ApiError(400, 'workspace_required', 'Workspace wajib dipilih.')
