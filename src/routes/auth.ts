@@ -42,17 +42,17 @@ async function resolveClerkUser(c: any, claims: any) {
   const display=[profile.first_name,profile.last_name].filter(Boolean).join(' ').slice(0,80)||null
   let user=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status,plan_started_at FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first<any>()
   if(!user) {
-    const existing=await c.env.DB.prepare('SELECT id,clerk_user_id,status FROM users WHERE email=?').bind(email).first<any>()
+    const existing=await c.env.DB.prepare('SELECT id,clerk_user_id,status,plan_tier,plan_status,plan_started_at FROM users WHERE email=?').bind(email).first<any>()
     if(existing) {
       if(existing.status!=='active') throw new ApiError(403,'account_disabled','Akun OLTAVYN ini tidak aktif. Hubungi dukungan.')
       if(existing.clerk_user_id && existing.clerk_user_id!==claims.sub) throw new ApiError(409,'identity_conflict','Email sudah terhubung ke identitas lain.')
       await c.env.DB.prepare('UPDATE users SET clerk_user_id=?,display_name=COALESCE(display_name,?) WHERE id=?').bind(claims.sub,display,existing.id).run()
-      user={id:existing.id,email,display_name:display,plan_tier:existing.plan_tier||'free',plan_status:existing.plan_status||'active'}
+      user={id:existing.id,email,display_name:display,plan_tier:existing.plan_tier||'free',plan_status:existing.plan_status||'active',plan_started_at:existing.plan_started_at||nowIso()}
     } else {
       const id=newId('usr'),salt=randomToken(16),dummy=await hashPassword(randomToken(32),salt)
-      await c.env.DB.prepare("INSERT INTO users (id,email,display_name,password_hash,password_salt,password_iterations,status,created_at,clerk_user_id) VALUES (?,?,?,?,?,?, 'active',?,?)")
-        .bind(id,email,display,dummy,salt,PBKDF2_ITERATIONS,nowIso(),claims.sub).run()
-      user={id,email,display_name:display,plan_tier:'free',plan_status:'active'}
+      await c.env.DB.prepare("INSERT INTO users (id,email,display_name,password_hash,password_salt,password_iterations,status,created_at,clerk_user_id,plan_started_at) VALUES (?,?,?,?,?,?, 'active',?,?,?)")
+        .bind(id,email,display,dummy,salt,PBKDF2_ITERATIONS,nowIso(),claims.sub,nowIso()).run()
+      user={id,email,display_name:display,plan_tier:'free',plan_status:'active',plan_started_at:nowIso()}
       await audit(c.env.DB,{actor_user_id:id,action:'user.register.google',resource_type:'user',resource_id:id})
     }
   }
