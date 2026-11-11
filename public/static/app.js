@@ -196,11 +196,19 @@ function workspaceFields(w = {}) {
 }
 function renderFirstWorkspace(main, _id, err) {
   main.innerHTML = html`
-  <div class="page-head"><div><h1>Buat workspace pertama</h1><p>Workspace menyimpan satu topik, audiens, dan tujuan beserta seluruh bukti, peluang, konten, dan eksperimen terkait.</p></div></div>
-  <div class="card" style="max-width:640px">${errorBox(err)}<form id="ws-form">${workspaceFields()}<button class="btn btn-primary" type="submit">Buat workspace</button></form></div>`.s
+  <div class="onboarding-wrap">
+    <div class="onboarding-progress"><span class="badge b-accent">LANGKAH 1 DARI 1</span><span class="small muted">Setup awal · sekitar 2 menit</span></div>
+    <div class="page-head"><div><h1>Selamat datang di OLTAVYN.</h1><p>Mulai dengan satu workspace untuk bisnis, niche, atau proyek affiliate yang ingin Anda kembangkan. Anda bisa mengubah semua detail ini nanti.</p></div></div>
+    <div class="grid grid-2 onboarding-grid">
+      <section class="card"><h2>Kenali alur kerja Anda</h2><ol class="onboarding-list"><li><strong>Riset</strong><span class="muted">Kumpulkan bukti produk dan kebutuhan audiens.</span></li><li><strong>Seleksi peluang</strong><span class="muted">Bandingkan potensi, risiko, dan hal yang belum diketahui.</span></li><li><strong>Produksi konten</strong><span class="muted">Siapkan konsep, skrip, dan draf dengan Agent.</span></li><li><strong>Uji dan pelajari</strong><span class="muted">Catat hasil nyata untuk menentukan langkah berikutnya.</span></li></ol><p class="small muted">Tidak perlu menghubungkan akun sosial atau memberikan password, cookie, maupun OTP.</p></section>
+      <section class="card"><h2>Siapkan workspace pertama</h2><p class="small muted">Isi yang sudah Anda ketahui. Detail lain bisa dilengkapi setelah masuk.</p>${errorBox(err)}<form id="ws-form">${workspaceFields()}<button class="btn btn-primary" type="submit" style="width:100%">Mulai gunakan OLTAVYN</button></form></section>
+    </div>
+  </div>`.s
   $('#ws-form').onsubmit = async (e) => {
     e.preventDefault()
-    try { const r = await api('POST', '/workspaces', compact(formData(e.target))); await afterWsCreated(r.workspace) } catch (er) { renderFirstWorkspace(main, null, er) }
+    const btn=e.submitter; btn.disabled=true; btn.textContent='Menyiapkan workspace…'
+    try { const r = await api('POST', '/workspaces', compact(formData(e.target))); await afterWsCreated(r.workspace) }
+    catch (er) { renderFirstWorkspace(main, null, er) }
   }
 }
 async function afterWsCreated(w) { state.wsId = w.id; await loadWorkspaces(); toast('Workspace dibuat.'); go('#/overview'); render() }
