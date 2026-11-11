@@ -121,3 +121,44 @@ The smoke test creates throwaway `@test.local` users and deletes their workspace
 - The assistant may recommend and execute technical choices within the agreed scope, but must report material assumptions and blockers.
 - Do not claim a feature is live, tested, connected, or successful without verifiable evidence.
 - Keep decisions and implementation notes in this repository so the project can be resumed consistently.
+
+
+## Faceless Affiliate Content Factory
+
+OLTAVYN is being extended as an internal-first, hybrid Faceless Affiliate Content Factory. Shopee Affiliate Indonesia is the first validation use case; the core remains marketplace- and platform-neutral. The factory reuses the existing evidence, opportunity, content approval, experiment, and learning workflow.
+
+- Technical blueprint: [docs/affiliate-factory/BLUEPRINT.md](docs/affiliate-factory/BLUEPRINT.md)
+- Operating workflow: [docs/affiliate-factory/WORKFLOW.md](docs/affiliate-factory/WORKFLOW.md)
+- Data model: [docs/affiliate-factory/DATA-MODEL.md](docs/affiliate-factory/DATA-MODEL.md)
+- Phase status and guardrails: [docs/affiliate-factory/README.md](docs/affiliate-factory/README.md)
+- Phase 1 schema: [migrations/0002_affiliate_factory.sql](migrations/0002_affiliate_factory.sql)
+
+The Phase 1 changes are being prepared on branch `feat/faceless-affiliate-factory-phase1`. Do not assume the migration has been applied or deployed until local verification and owner-approved release steps are complete. No paid providers or paid scraping are enabled.
+
+
+## Product architecture and first operating product
+
+- **Product boundaries:** [docs/PRODUCT_BOUNDARIES.md](docs/PRODUCT_BOUNDARIES.md) — AVORLUNE business, OLTAVYN Core Engine, and Affiliate OS.
+- **Affiliate OS workbench:** open `/affiliate` after signing in to OLTAVYN.
+- **Provider integrations:** [docs/PROVIDER_INTEGRATIONS.md](docs/PROVIDER_INTEGRATIONS.md) — Groq, Tavily, Apify, and Scrape.ly setup, costs, and safety.
+- **Implementation and release gates:** [docs/affiliate-factory/PHASE_2_STATUS.md](docs/affiliate-factory/PHASE_2_STATUS.md).
+
+**Phase 3 status:** see [docs/affiliate-factory/IMPLEMENTATION_REPORT.md](docs/affiliate-factory/IMPLEMENTATION_REPORT.md) — API reference, data model, scorecard, content factory, provider/cost matrix, threat notes, QA results and Indonesian operator guide. Tests: `npm run test:providers` (mocked), `npm run test:smoke`, `npm run test:affiliate` (set `BASE_URL`).
+
+The Affiliate OS workbench and provider adapters currently exist on the feature branch only. They are not live on `oltavyn.pages.dev` until this PR is verified, merged, and separately deployed. No provider credentials are configured by this repository.
+
+
+## Genspark implementation handoff and documentation pack
+
+Use [GENSPARK_FULLSTACK_IMPLEMENTATION_PROMPT.md](GENSPARK_FULLSTACK_IMPLEMENTATION_PROMPT.md) as the project-level instruction when handing the repository to Genspark.ai. It directs Genspark to inspect and implement the existing full-stack app rather than create a separate project, and includes product boundaries, provider adapters, security, QA, CI, cost controls and release gates.
+
+Operational and governance documents:
+- [Implementation gap audit](docs/IMPLEMENTATION_GAP_AUDIT.md)
+- [Provider review register](docs/PROVIDER_REVIEW_REGISTER.md)
+- [Security and privacy checklist](docs/SECURITY_PRIVACY_CHECKLIST.md)
+- [QA test matrix](docs/QA_TEST_MATRIX.md)
+- [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
+- [Release runbook](docs/RELEASE_RUNBOOK.md)
+- [Changelog](docs/CHANGELOG.md)
+
+These documents are an implementation baseline. Their statuses must be updated only from actual test output and verified provider/deployment evidence. No production migration, deployment, live provider call or paid Actor run is implied by documentation commits.

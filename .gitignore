@@ -8,3 +8,4 @@ dist/
 logs/
 *.tar.gz
 *.zip
+.tmp/
