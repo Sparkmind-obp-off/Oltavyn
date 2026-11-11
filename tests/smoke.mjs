@@ -17,6 +17,9 @@ function client() {
     return { s: r.status, j }
   }
 }
+const rnd = Math.random().toString(36).slice(2, 8)
+const A = client(), B = client(), anon = client()
+
 // Google-only authentication contract. Legacy password-based integration fixtures are intentionally retired.
 const authConfig = await fetch(BASE + '/api/auth/config').then(r => r.json()).catch(() => null)
 if (authConfig?.auth_mode === 'google_only') {
@@ -35,8 +38,6 @@ if (authConfig?.auth_mode === 'google_only') {
   process.exit(fail ? 1 : 0)
 }
 
-const rnd = Math.random().toString(36).slice(2, 8)
-const A = client(), B = client(), anon = client()
 
 console.log('Auth')
 let r = await anon('GET', '/workspaces'); ok(r.s === 401, 'unauthenticated private request denied')
