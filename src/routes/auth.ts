@@ -93,14 +93,6 @@ export const csrfGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
 
 export const auth = new Hono<AppEnv>()\n\nauth.get('/config', c => c.json({ clerk_enabled: !!(c.env.CLERK_PUBLISHABLE_KEY && c.env.CLERK_JWT_PUBLIC_KEY && c.env.CLERK_SECRET_KEY), publishable_key: c.env.CLERK_PUBLISHABLE_KEY || null }))
 
-auth.post('/register', async () => {
-  throw new ApiError(410,'google_only_auth','Pendaftaran hanya tersedia melalui tombol Lanjutkan dengan Google.')
-})
-
-auth.post('/login', async () => {
-  throw new ApiError(410,'google_only_auth','Login hanya tersedia melalui tombol Lanjutkan dengan Google.')
-})
-
 auth.post('/logout', async (c) => {
   const token = getCookie(c, COOKIE)
   if (token) await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(await sha256Hex(token)).run()
