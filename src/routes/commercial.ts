@@ -141,8 +141,9 @@ export const duitkuWebhook = async (c: any) => {
       await c.env.DB.prepare("INSERT OR IGNORE INTO commercial_entitlements (id,order_id,order_item_id,user_id,workspace_id,sku,status,granted_at) VALUES (?,?,?,?,?,?,'active',?)")
         .bind(entitlementId,payment.order_id,item.id,payment.user_id,payment.workspace_id,item.sku_snapshot,now).run()
       const entitlement = await c.env.DB.prepare('SELECT id FROM commercial_entitlements WHERE order_item_id=?').bind(item.id).first<any>()
-      if (entitlement) await c.env.DB.prepare("INSERT OR IGNORE INTO commercial_service_jobs (id,entitlement_id,order_id,workspace_id,status,brief_json,created_at,updated_at) VALUES (?,?,?,?,'queued','{}',?,?)")
-        .bind(newId('job'),entitlement.id,payment.order_id,payment.workspace_id,now,now).run()
+      if (entitlement) const revisionLimit = item.sku_snapshot === 'affiliate_starter' ? 0 : item.sku_snapshot === 'affiliate_growth' ? 2 : 1
+      await c.env.DB.prepare("INSERT OR IGNORE INTO commercial_service_jobs (id,entitlement_id,order_id,workspace_id,status,brief_json,revision_limit,created_at,updated_at) VALUES (?,?,?,?,'queued','{}',?,?,?)")
+        .bind(newId('job'),entitlement.id,payment.order_id,payment.workspace_id,revisionLimit,now,now).run()
     }
     await audit(c.env.DB,{workspace_id:payment.workspace_id,actor_user_id:null,action:'commercial.payment.verified',resource_type:'commercial_payment',resource_id:payment.id})
   } else {
