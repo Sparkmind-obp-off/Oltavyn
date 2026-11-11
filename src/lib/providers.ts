@@ -25,8 +25,7 @@ const bases: Record<ProviderId, [string, string]> = {
   groq: ['GROQ_BASE_URL', 'https://api.groq.com/openai/v1'],
   tavily: ['TAVILY_BASE_URL', 'https://api.tavily.com'],
   apify: ['APIFY_BASE_URL', 'https://api.apify.com/v2'],
-  // Scrape.ly endpoint and run path must be explicitly configured after official docs review.
-  scrapely: ['SCRAPELY_BASE_URL', ''],
+  scrapely: ['SCRAPELY_BASE_URL', 'https://api.scrape.ly'],
 }
 const baseUrl = (env: ProviderEnv, id: ProviderId) => (env[bases[id][0]] || bases[id][1]).replace(/\/+$/, '')
 
@@ -42,7 +41,7 @@ export function providerStatus(env: ProviderEnv) {
   return PROVIDERS.map((p) => {
     const configured = !!env[p.secret]
     const enabled = providerEnabled(env, p.id)
-    const endpointReady = p.id !== 'scrapely' || (!!env.SCRAPELY_BASE_URL && !!env.SCRAPELY_RUN_PATH && env.SCRAPELY_BASE_URL.startsWith('https://') && env.SCRAPELY_RUN_PATH.startsWith('/'))
+    const endpointReady = p.id !== 'scrapely' || (baseUrl(env, 'scrapely').startsWith('https://'))
     return {
       id: p.id, purpose: p.purpose, billing_note: p.billing, enabled, endpoint_ready: endpointReady,
       state: !enabled ? 'disabled' : !endpointReady ? 'endpoint_unverified' : configured ? 'configured_unverified' : 'unconfigured',
@@ -115,7 +114,7 @@ export async function tavilySearch(env: ProviderEnv, fetchImpl: FetchLike, input
   return { provider: 'tavily', query, captured_at, results, note: 'Hasil adalah petunjuk riset, bukan fakta terverifikasi. Tinjau sebelum disimpan sebagai bukti.' }
 }
 
-export async function runActor(env: ProviderEnv, fetchImpl: FetchLike, id: 'apify' | 'scrapely', input: { actor_id?: unknown; confirm_run?: unknown; input?: unknown }) {
+export async function runActor(env: ProviderEnv, fetchImpl: FetchLike, id: 'apify' | 'scrapely', input: { actor_id?: unknown; confirm_run?: unknown; input?: unknown; max_total_charge_usd?: unknown; max_items?: unknown; timeout_seconds?: unknown }) {
   const key = requireKey(env, id)
   const actorId = str(input.actor_id, 180).trim()
   if (!actorId || !/^[A-Za-z0-9._~\-\/]+$/.test(actorId)) throw new ProviderError(400, 'validation_failed', 'Actor ID tidak valid.')
@@ -123,15 +122,15 @@ export async function runActor(env: ProviderEnv, fetchImpl: FetchLike, id: 'apif
   if (input.confirm_run !== true) throw new ProviderError(400, 'explicit_approval_required', 'confirm_run=true wajib untuk setiap eksekusi. Konfirmasi bukan batas belanja.')
   const body = input.input && typeof input.input === 'object' && !Array.isArray(input.input) ? input.input : {}
   if (JSON.stringify(body).length > 20000) throw new ProviderError(400, 'input_too_large', 'Input Actor maksimal 20 KB.')
-  let path: string
-  if (id === 'apify') path = `/acts/${encodeURIComponent(actorId.replace('/', '~'))}/runs`
-  else {
-    const configuredPath = String(env.SCRAPELY_RUN_PATH || '')
-    const configuredBase = baseUrl(env, 'scrapely')
-    if (!configuredBase.startsWith('https://') || !configuredPath.startsWith('/') || configuredPath.includes('..')) throw new ProviderError(503, 'provider_endpoint_unverified', 'Scrape.ly belum aktif: endpoint dan pola path resmi harus ditinjau lalu dikonfigurasi terlebih dahulu.')
-    path = configuredPath.replaceAll('{actorId}', encodeURIComponent(actorId))
-  }
-  const data = await call(fetchImpl, id, `${baseUrl(env, id)}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const maxCharge = Number(input.max_total_charge_usd)
+  const maxItems = Number(input.max_items)
+  const timeout = Number(input.timeout_seconds)
+  if (!Number.isFinite(maxCharge) || maxCharge < 0.01 || maxCharge > 1) throw new ProviderError(400, 'spend_cap_required', 'Batas biaya wajib diisi antara USD 0,01 dan USD 1,00 untuk satu run.')
+  if (!Number.isInteger(maxItems) || maxItems < 1 || maxItems > 100) throw new ProviderError(400, 'max_items_invalid', 'Batas item wajib angka bulat 1–100.')
+  if (!Number.isInteger(timeout) || timeout < 1 || timeout > 120) throw new ProviderError(400, 'timeout_invalid', 'Timeout wajib angka bulat 1–120 detik.')
+  const path = id === 'apify' ? `/acts/${encodeURIComponent(actorId.replace('/', '~'))}/runs` : `/actors/${encodeURIComponent(actorId)}/runs`
+  const query = new URLSearchParams({ maxTotalChargeUsd: String(maxCharge), maxItems: String(maxItems), timeout: String(timeout) })
+  const data = await call(fetchImpl, id, `${baseUrl(env, id)}${path}?${query.toString()}`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const run = data?.data || data || {}
-  return { provider: id, actor_id: actorId, run_id: str(run.id, 100) || null, status: str(run.status, 40) || 'submitted', dataset_id: str(run.defaultDatasetId, 100) || null, warning: 'Eksekusi Actor dapat mengonsumsi kredit provider. Hasil belum diimpor ke workspace.' }
+  return { provider: id, actor_id: actorId, run_id: str(run.id, 100) || null, status: str(run.status, 40) || 'submitted', dataset_id: str(run.defaultDatasetId, 100) || null, spend_cap_usd: maxCharge, max_items: maxItems, timeout_seconds: timeout, warning: 'Batas biaya maksimum dikirim ke provider. Tetap periksa billing dan usage dashboard; hasil belum diimpor ke workspace.' }
 }
