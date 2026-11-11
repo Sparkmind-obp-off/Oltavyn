@@ -9,7 +9,7 @@ const app = new Hono<AppEnv>()
 app.use('*', async(c,next)=>{
   let clerkOrigin=''
   try { const key=c.env.CLERK_PUBLISHABLE_KEY; const part=key?.split('_')[2]; if(part) clerkOrigin='https://'+atob(part).slice(0,-1) } catch {}
-  const policy={defaultSrc:["'self'"],scriptSrc:["'self'",...(clerkOrigin?[clerkOrigin]:[])],styleSrc:["'self'","'unsafe-inline'",'https://fonts.googleapis.com'],fontSrc:["'self'",'https://fonts.gstatic.com',...(clerkOrigin?[clerkOrigin]:[])],imgSrc:["'self'",'data:','https:'],connectSrc:["'self'",...(clerkOrigin?[clerkOrigin]:[]),'https://api.clerk.com'],frameSrc:["'self'",...(clerkOrigin?[clerkOrigin]:[]),'https://accounts.google.com'],frameAncestors:["'none'"],formAction:["'self'"],baseUri:["'self'"]}
+  const policy={defaultSrc:["'self'"],scriptSrc:["'self'",...(clerkOrigin?[clerkOrigin]:[])],styleSrc:["'self'","'unsafe-inline'",'https://fonts.googleapis.com',...(clerkOrigin?[clerkOrigin]:[])],fontSrc:["'self'",'https://fonts.gstatic.com',...(clerkOrigin?[clerkOrigin]:[])],imgSrc:["'self'",'data:','https:'],connectSrc:["'self'",...(clerkOrigin?[clerkOrigin]:[]),'https://api.clerk.com'],frameSrc:["'self'",...(clerkOrigin?[clerkOrigin]:[]),'https://accounts.google.com'],frameAncestors:["'none'"],formAction:["'self'"],baseUri:["'self'"]}
   return secureHeaders({contentSecurityPolicy:policy,referrerPolicy:'strict-origin-when-cross-origin'})(c,next)
 })
 app.use('/api/*',async(c,next)=>{await next();c.header('Cache-Control','no-store')})
