@@ -388,7 +388,7 @@ affiliateApi.post('/agent/chat', async (c) => {
     providerState = 'unavailable'
   }
   if (!answer && providerState !== 'used') answer = 'Saya siap membantu. Periksa konfigurasi provider lalu coba lagi.'
-  if (researchError) answer += '\\n\\nCatatan riset: ' + researchError + '. Tidak ada sumber yang berhasil ditambahkan.'
+  if (researchError) answer += '\n\nCatatan riset: ' + researchError + '. Tidak ada sumber yang berhasil ditambahkan.'
   const assistantId = newId('agm'), assistantTime = nowIso()
   const metadata = { provider: model, provider_state: providerState, research_leads: research?.results?.length || 0, research_note: research?.note || null, research_error: researchError }
   await c.env.DB.prepare("INSERT INTO agent_messages (id,conversation_id,role,content,metadata_json,created_at) VALUES (?,?,'assistant',?,?,?)").bind(assistantId, conversationId, answer, safeJson(metadata), assistantTime).run()
