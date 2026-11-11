@@ -91,16 +91,19 @@ export async function runGroqToolLoop(input: GroqToolLoopInput): Promise<GroqToo
       text: typeof choice.content === 'string' ? choice.content.slice(0, 24000) : '',
       model, toolCalls, iterations: iteration + 1, usage,
     }
+    const remainingCalls = maxCalls - toolCalls.length
+    if (remainingCalls <= 0) return { text: 'Batas pemanggilan tool untuk giliran ini tercapai.', model, toolCalls, iterations: iteration + 1, usage }
+    const allowedCalls = requested.slice(0, remainingCalls)
     messages.push({
       role: 'assistant',
       content: typeof choice.content === 'string' ? choice.content : null,
-      tool_calls: requested.slice(0, maxCalls - toolCalls.length).map((call: any) => ({
+      tool_calls: allowedCalls.map((call: any) => ({
         id: String(call.id || '').slice(0, 120),
         type: 'function',
         function: { name: String(call.function?.name || '').slice(0, 120), arguments: String(call.function?.arguments || '').slice(0, 4000) },
       })),
     })
-    for (const call of requested.slice(0, maxCalls - toolCalls.length)) {
+    for (const call of allowedCalls) {
       const name = String(call.function?.name || '')
       const args = safeObject(String(call.function?.arguments || ''))
       let result: ToolExecutionResult
