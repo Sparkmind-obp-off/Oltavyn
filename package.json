@@ -14,8 +14,9 @@
     "test:affiliate": "node tests/affiliate-smoke.mjs",
     "test:agent-tools": "esbuild tests/agent-tool-calling.test.ts --bundle --platform=node --format=esm --log-level=warning --outfile=.tmp/agent-tool-calling.test.mjs && node .tmp/agent-tool-calling.test.mjs",
     "test:providers": "esbuild tests/providers.test.ts --bundle --platform=node --format=esm --log-level=warning --outfile=.tmp/providers.test.mjs && node .tmp/providers.test.mjs",
-    "test:all": "npm run typecheck && npm run build && npm run db:migrate:local && npm run test:agent-tools && npm run test:providers && npm run test:smoke && npm run test:affiliate",
-    "deploy:prod": "npm run build && wrangler pages deploy dist --project-name oltavyn --branch main"
+    "test:all": "npm run typecheck && npm run build && npm run db:migrate:local && npm run test:agent-tools && npm run test:providers && npm run test:cloudflare-access && npm run test:smoke && npm run test:affiliate",
+    "deploy:prod": "npm run build && wrangler pages deploy dist --project-name oltavyn --branch main",
+    "test:cloudflare-access": "esbuild tests/cloudflare-access.test.ts --bundle --platform=node --format=esm --log-level=warning --outfile=.tmp/cloudflare-access.test.mjs && node --test .tmp/cloudflare-access.test.mjs"
   },
   "dependencies": {
     "hono": "^4.6.0"
