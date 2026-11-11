@@ -105,6 +105,6 @@ Affiliate OS now includes a workspace-scoped interactive chat at the **AI Agent*
 
 Apply migration 0004 to the target D1 database before using the chat:
 ```sh
-npx wrangler d1 migrations apply oltavyn-production --remote
+npm run db:migrate:prod
 ```
 Only run this after verifying the configured production database ID and taking the normal backup/rollback precautions. Do not run it against an unknown or stale database binding.
