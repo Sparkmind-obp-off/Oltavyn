@@ -311,6 +311,12 @@ async function providerCall<T>(c: any, id: string, limit: number, fn: () => Prom
   }
 }
 affiliateApi.get('/providers', (c) => c.json({ providers: providerStatus(penv(c)), note: 'Status hanya berdasarkan konfigurasi; tidak ada permintaan ke provider. "configured_unverified" ≠ kredensial valid.' }))
+affiliateApi.get('/providers/usage', async (c) => {
+  const { results } = await c.env.DB.prepare("SELECT resource_id AS provider, COUNT(*) AS calls_30d, MAX(created_at) AS last_called_at FROM audit_events WHERE action LIKE 'provider.%.call' AND created_at >= datetime('now','-30 days') GROUP BY resource_id ORDER BY resource_id").all()
+  const usage = Object.fromEntries(['groq','tavily','apify','scrapely'].map((id) => [id, { calls_30d: 0, last_called_at: null }]))
+  for (const row of results as any[]) if (row.provider in usage) usage[row.provider] = { calls_30d: Number(row.calls_30d) || 0, last_called_at: row.last_called_at || null }
+  return c.json({ window_days: 30, usage, cost_tracking: 'unavailable', note: 'Jumlah panggilan dihitung dari audit log. Biaya, kredit, dan token aktual tetap harus diperiksa di dashboard provider.' })
+})
 affiliateApi.post('/providers/groq/generate', async (c) => { const d = await json(c); return c.json(await providerCall(c, 'groq', 20, () => groqGenerate(penv(c), fetch, d))) })
 affiliateApi.post('/providers/tavily/search', async (c) => { const d = await json(c); return c.json(await providerCall(c, 'tavily', 20, () => tavilySearch(penv(c), fetch, d))) })
 affiliateApi.post('/providers/apify/run', async (c) => { const d = await json(c); return c.json(await providerCall(c, 'apify', 2, () => runActor(penv(c), fetch, 'apify', d)), 202) })
