@@ -59,9 +59,9 @@ Primary references:
 | Cache/config | KV | In-memory cache | Never canonical evidence or financial records |
 
 Specific decisions:
-- Keep Groq as the initial inference adapter while account allowance and model quality meet needs. Do not assume unlimited free inference.
-- Keep Tavily optional, not always-on. Its current pricing page advertises 1,000 monthly API credits on the free tier with no card; operations consume credits. Add monthly app budgets and hard-stop when exhausted.
-- Keep Apify and Scrape.ly as alternative adapters, not simultaneous defaults. Apify has broad Store discovery; Scrape.ly remains an alternative catalog/execution source. Evaluate each Actor independently; a platform free allowance does not make every Actor free.
+- Keep Groq as the initial inference adapter while account allowance and model quality meet needs. Groq supports local function/tool calling, where OLTAVYN—not the model host—validates and executes each tool call; this is the preferred pattern for fine-grained policy control. Do not assume unlimited free inference.
+- Keep Tavily optional, not always-on. Its current pricing page advertises 1,000 monthly API credits on the free tier with no card; operations consume credits. The comprehensive Research endpoint was unavailable to this connected account during this audit, while Search remained callable. Add monthly app budgets and hard-stop when exhausted.
+- Keep Apify and Scrape.ly as alternative adapters, not simultaneous defaults. Apify has broad Store discovery; its free plan includes platform usage, but after that allowance is consumed the platform may stop until the next cycle, and Store Actors can have separate pricing. Scrape.ly currently advertises $5 monthly free usage without a card, but compute, proxies, storage and paid Store Actor fees all draw from that credit; runs can be stopped when balance is insufficient. Evaluate each Actor independently; a platform free allowance does not make every Actor free.
 - Do not enable Shopee scraping Actors for production harvesting by default. Shopee individual affiliate terms prohibit automated extraction methods for accessing/using Shopee intellectual property and confidential material. Use permitted official affiliate surfaces, user-provided URLs/data, approved exports or authorized APIs. Block Actors whose method or terms conflict with platform rules.
 - Do not let a model decide affordability. Maintain verified Actor pricing/schema metadata, estimate costs, require confirmation and reconcile usage.
 
