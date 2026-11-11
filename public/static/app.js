@@ -146,7 +146,7 @@ async function loadWorkspaces() {
 const app = $('#app')
 function render() {
   if (state.user === undefined) return
-  if (!state.user) return route().page === 'pricing' ? pagePublicCatalog() : renderAuth()
+  if (!state.user) return route().page === 'pricing' ? pagePublicCatalog() : renderAuth(['register', 'signup'].includes(route().page) ? 'register' : 'login')
   if (!state.workspaces.length) return renderShell(renderFirstWorkspace)
   const { page, id } = route()
   const pages = { overview: pageOverview, research: pageResearch, opportunities: pageOpportunities, content: pageContent, experiments: pageExperiments, learning: pageLearning, commercial: pageCommercial, settings: pageSettings }
@@ -228,8 +228,8 @@ function renderAuth(mode = 'login', err = null) {
     const slot = $('#clerk-auth')
     clerkAuthMounted = slot
     const redirect = window.location.origin + '/'
-    if (mode === 'register') clerkInstance.mountSignUp(slot, { fallbackRedirectUrl: redirect, signInUrl: '/' })
-    else clerkInstance.mountSignIn(slot, { fallbackRedirectUrl: redirect, signUpUrl: '/' })
+    if (mode === 'register') clerkInstance.mountSignUp(slot, { fallbackRedirectUrl: redirect, signInUrl: window.location.origin + '/#/login' })
+    else clerkInstance.mountSignIn(slot, { fallbackRedirectUrl: redirect, signUpUrl: window.location.origin + '/#/register' })
   }
 }
 
