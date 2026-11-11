@@ -144,7 +144,7 @@ export const duitkuWebhook = async (c: any) => {
     }
     await audit(c.env.DB,{workspace_id:payment.workspace_id,actor_user_id:null,action:'commercial.payment.verified',resource_type:'commercial_payment',resource_id:payment.id})
   } else {
-    await c.env.DB.prepare("UPDATE undefined").bind(now,payment.id).run()
+    await c.env.DB.prepare("UPDATE commercial_payments SET status='failed',updated_at=? WHERE id=? AND status<>'paid'").bind(now,payment.id).run()
   }
   return c.json({ok:true})
 }
