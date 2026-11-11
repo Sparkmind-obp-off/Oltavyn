@@ -27,6 +27,10 @@ async function verifyClerkToken(token: string, c: any) {
   return claims
 }
 async function resolveClerkUser(c: any, claims: any) {
+  // Once a Google identity is linked, use the internal user mapping on subsequent requests.
+  // Google is the only enabled Clerk provider; first-time provisioning validates the provider below.
+  const linked=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status,plan_started_at FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first<any>()
+  if(linked) return linked
   if (!c.env.CLERK_SECRET_KEY) throw new ApiError(503,'clerk_not_configured','CLERK_SECRET_KEY belum dipasang.')
   const response=await fetch('https://api.clerk.com/v1/users/'+encodeURIComponent(claims.sub),{headers:{Authorization:'Bearer '+c.env.CLERK_SECRET_KEY}})
   if(!response.ok) throw new ApiError(502,'clerk_profile_unavailable','Profil akun Clerk belum dapat diverifikasi.')
@@ -38,23 +42,18 @@ async function resolveClerkUser(c: any, claims: any) {
     throw new ApiError(403,'verified_google_email_required','Akun Google harus memiliki email utama terverifikasi.')
   const email=String(primary.email_address).toLowerCase()
   const display=[profile.first_name,profile.last_name].filter(Boolean).join(' ').slice(0,80)||null
-  let user=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status,plan_started_at FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first<any>()
-  if(!user) {
-    const existing=await c.env.DB.prepare('SELECT id,clerk_user_id,status,plan_tier,plan_status,plan_started_at FROM users WHERE email=?').bind(email).first<any>()
-    if(existing) {
-      if(existing.status!=='active') throw new ApiError(403,'account_disabled','Akun OLTAVYN ini tidak aktif. Hubungi dukungan.')
-      if(existing.clerk_user_id && existing.clerk_user_id!==claims.sub) throw new ApiError(409,'identity_conflict','Email sudah terhubung ke identitas lain.')
-      await c.env.DB.prepare('UPDATE users SET clerk_user_id=?,display_name=COALESCE(display_name,?) WHERE id=?').bind(claims.sub,display,existing.id).run()
-      user={id:existing.id,email,display_name:display,plan_tier:existing.plan_tier||'free',plan_status:existing.plan_status||'active',plan_started_at:existing.plan_started_at||nowIso()}
-    } else {
-      const id=newId('usr'),salt=randomToken(16),dummy=await hashPassword(randomToken(32),salt)
-      await c.env.DB.prepare("INSERT INTO users (id,email,display_name,password_hash,password_salt,password_iterations,status,created_at,clerk_user_id,plan_started_at) VALUES (?,?,?,?,?,?, 'active',?,?,?)")
-        .bind(id,email,display,dummy,salt,PBKDF2_ITERATIONS,nowIso(),claims.sub,nowIso()).run()
-      user={id,email,display_name:display,plan_tier:'free',plan_status:'active',plan_started_at:nowIso()}
-      await audit(c.env.DB,{actor_user_id:id,action:'user.register.google',resource_type:'user',resource_id:id})
-    }
+  const existing=await c.env.DB.prepare('SELECT id,clerk_user_id,status,plan_tier,plan_status,plan_started_at FROM users WHERE email=?').bind(email).first<any>()
+  if(existing) {
+    if(existing.status!=='active') throw new ApiError(403,'account_disabled','Akun OLTAVYN ini tidak aktif. Hubungi dukungan.')
+    if(existing.clerk_user_id && existing.clerk_user_id!==claims.sub) throw new ApiError(409,'identity_conflict','Email sudah terhubung ke identitas lain.')
+    await c.env.DB.prepare('UPDATE users SET clerk_user_id=?,display_name=COALESCE(display_name,?) WHERE id=?').bind(claims.sub,display,existing.id).run()
+    return {id:existing.id,email,display_name:display,plan_tier:existing.plan_tier||'free',plan_status:existing.plan_status||'active',plan_started_at:existing.plan_started_at||nowIso()}
   }
-  return user
+  const id=newId('usr'),salt=randomToken(16),dummy=await hashPassword(randomToken(32),salt),created=nowIso()
+  await c.env.DB.prepare("INSERT INTO users (id,email,display_name,password_hash,password_salt,password_iterations,status,created_at,clerk_user_id,plan_started_at) VALUES (?,?,?,?,?,?, 'active',?,?,?)")
+    .bind(id,email,display,dummy,salt,PBKDF2_ITERATIONS,created,claims.sub,created).run()
+  await audit(c.env.DB,{actor_user_id:id,action:'user.register.google',resource_type:'user',resource_id:id})
+  return {id,email,display_name:display,plan_tier:'free',plan_status:'active',plan_started_at:created}
 }
 
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
