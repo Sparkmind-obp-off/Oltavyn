@@ -334,9 +334,11 @@ affiliateApi.post('/agent/chat', async (c) => {
   ])
   const recent = (history as any[]).reverse().map((m) => ({ role: m.role, content: String(m.content).slice(0, 6000) }))
   let research: any = null
+  let researchError: string | null = null
   const useTavily = d.use_tavily === true
   if (useTavily) {
-    research = await providerCall(c, 'tavily', 10, () => tavilySearch(penv(c), fetch, { query: message.slice(0, 400) }))
+    try { research = await providerCall(c, 'tavily', 10, () => tavilySearch(penv(c), fetch, { query: message.slice(0, 400) })) }
+    catch (e) { researchError = e instanceof Error ? e.message : 'Riset Tavily tidak tersedia.' }
   }
   const context = {
     workspace: { name: ws.name, niche: ws.niche, audience: ws.audience, goal: ws.goal, locale: ws.locale },
@@ -370,13 +372,14 @@ affiliateApi.post('/agent/chat', async (c) => {
     model = generated.model
     providerState = 'used'
   } catch (e) {
-    if (e instanceof ProviderError && ['provider_not_configured','provider_disabled'].includes(e.code)) {
-      answer = 'Saya siap membantu mengelola pekerjaan Affiliate OS, tetapi model chat Groq belum aktif. Buka tab Provider untuk memeriksa konfigurasi Groq. Sementara itu, kamu tetap bisa menggunakan modul Produk, Kanal, Evidence, Scorecard, dan Content Studio secara manual. Saya tidak akan mengklaim sudah menjalankan tindakan eksternal.'
-      providerState = e.code
-    } else { throw e }
+    const reason = e instanceof Error ? e.message : 'Provider belum dapat digunakan.'
+    answer = 'Saya menerima pesanmu, tetapi model AI belum dapat menyelesaikan jawaban. ' + reason + ' Periksa konfigurasi dan status Groq di tab Provider, lalu coba lagi. Riwayat pesan tetap tersimpan; tidak ada tindakan eksternal yang dijalankan.'
+    providerState = 'unavailable'
   }
+  if (!answer && providerState !== 'used') answer = 'Saya siap membantu. Periksa konfigurasi provider lalu coba lagi.'
+  if (researchError) answer += '\\n\\nCatatan riset: ' + researchError + '. Tidak ada sumber yang berhasil ditambahkan.'
   const assistantId = newId('agm'), assistantTime = nowIso()
-  const metadata = { provider: model, provider_state: providerState, research_leads: research?.results?.length || 0, research_note: research?.note || null }
+  const metadata = { provider: model, provider_state: providerState, research_leads: research?.results?.length || 0, research_note: research?.note || null, research_error: researchError }
   await c.env.DB.prepare("INSERT INTO agent_messages (id,conversation_id,role,content,metadata_json,created_at) VALUES (?,?,'assistant',?,?,?)").bind(assistantId, conversationId, answer, safeJson(metadata), assistantTime).run()
   await c.env.DB.prepare('UPDATE agent_conversations SET updated_at=? WHERE id=?').bind(assistantTime, conversationId).run()
   await audit(c.env.DB, { workspace_id: ws.id, actor_user_id: uid(c), action: 'agent.chat.message', resource_type: 'agent_conversation', resource_id: conversationId })
