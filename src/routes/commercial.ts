@@ -93,7 +93,7 @@ api.post('/orders/:id/checkout', async c => {
     email:c.get('user').email,
     itemDetails,
     callbackUrl:cfg.origin+'/api/webhooks/duitku/pop',
-    returnUrl:cfg.origin+'/payment/return?order='+encodeURIComponent(order.id),
+    returnUrl:cfg.origin+'/#/commercial',
     expiryPeriod:60
   }
   const response = await fetch(cfg.base+'/api/merchant/createInvoice',{method:'POST',headers:{'Content-Type':'application/json','x-duitku-timestamp':timestamp,'x-duitku-signature':signature,'x-duitku-merchantcode':cfg.merchant},body:JSON.stringify(payload)})
