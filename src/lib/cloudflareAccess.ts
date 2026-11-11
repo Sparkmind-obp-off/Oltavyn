@@ -61,6 +61,9 @@ export async function verifyAccessToken(token: string, teamDomain: string, audie
 export const requireCloudflareAccess: MiddlewareHandler<AppEnv> = async (c, next) => {
   const teamDomain = String(c.env.CF_ACCESS_TEAM_DOMAIN || '').trim().replace(/^https:\/\//, '').replace(/\/$/, '')
   const audiences = String(c.env.CF_ACCESS_AUD || '').split(',').map(value => value.trim()).filter(Boolean)
+  if (teamDomain && !/^[a-z0-9-]+\.cloudflareaccess\.com$/i.test(teamDomain)) {
+    throw new ApiError(503, 'access_not_configured', 'Domain tim Cloudflare Access tidak valid.')
+  }
   // Local-only escape hatch for development. Production and Pages previews fail closed.
   const host = new URL(c.req.url).hostname
   const local = host === 'localhost' || host === '127.0.0.1'
