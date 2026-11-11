@@ -82,7 +82,9 @@ export const csrfGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next()
 }
 
-export const auth = new Hono<AppEnv>()\n\nauth.get('/config', c => c.json({ auth_mode: 'google_only', clerk_enabled: !!(c.env.CLERK_PUBLISHABLE_KEY && c.env.CLERK_JWT_PUBLIC_KEY && c.env.CLERK_SECRET_KEY), publishable_key: c.env.CLERK_PUBLISHABLE_KEY || null }))
+export const auth = new Hono<AppEnv>()
+
+auth.get('/config', c => c.json({ auth_mode: 'google_only', clerk_enabled: !!(c.env.CLERK_PUBLISHABLE_KEY && c.env.CLERK_JWT_PUBLIC_KEY && c.env.CLERK_SECRET_KEY), publishable_key: c.env.CLERK_PUBLISHABLE_KEY || null }))
 
 auth.post('/register', async () => { throw new ApiError(410, 'google_only_auth', 'Pendaftaran email dan kata sandi telah dinonaktifkan. Gunakan Google.') })
 auth.post('/login', async () => { throw new ApiError(410, 'google_only_auth', 'Login email dan kata sandi telah dinonaktifkan. Gunakan Google.') })
