@@ -1,6 +1,6 @@
 # OLTAVYN Commercial Platform & Duitku POP Integration Contract
 
-Status: commercial API + additive schema committed; Duitku remains sandbox/configuration-gated and is NOT production-enabled.
+Status: commercial schema/API, customer catalog/order UI, onboarding journey and Clerk integration code committed. Checkout is gated by an explicit Cloudflare flag and remains disabled until configuration and tests pass.
 Date: 2026-11-11
 Scope: same OLTAVYN application and D1 database; no second product or separate chatbot.
 Principles: Rp0-first, Cloudflare-first, no secret in source control, no production migration/deployment without explicit approval.
@@ -61,6 +61,7 @@ Credentials must exist only as Cloudflare Worker secrets. Secret names (set only
 - DUITKU_MERCHANT_CODE
 - DUITKU_API_KEY
 - DUITKU_BASE_URL (optional; defaults to sandbox; only sandbox and production official hosts are accepted)
+- DUITKU_CHECKOUT_ENABLED (must equal `true` to expose purchase actions; default disabled)
 - PUBLIC_APP_URL (optional canonical HTTPS origin; defaults to the OLTAVYN Pages origin)
 - DUITKU_CALLBACK_URL and DUITKU_RETURN_URL should be derived from configured canonical origin, not user input.
 
@@ -69,7 +70,7 @@ Never put the API key in frontend JavaScript, HTML, D1, logs, GitHub or chat. Ne
 ## 5. Required endpoints and lifecycle
 
 Customer:
-- GET /commercial/catalog
+- GET /commercial/catalog (returns checkout readiness; catalog remains viewable while checkout is disabled)
 - GET /commercial/catalog/:sku
 - POST /commercial/orders (authenticated; server computes all prices and snapshots scope)
 - GET /commercial/orders
@@ -126,8 +127,8 @@ Customer-facing Agent tools must additionally check entitlement and remaining qu
 3. Authenticated APIs exist for catalog, order creation/list/detail and Duitku checkout; prices and scope are server-resolved and snapshotted.
 4. Public Duitku callback route verifies HMAC, merchant, amount and reference; successful callbacks idempotently grant entitlements and queue service jobs.
 5. Add local migration and mocked tests for order snapshot, pricing, ownership, checkout idempotency, signature, callback replay and entitlement idempotency.
-6. Add customer-facing storefront/order UI, admin catalog/operations UI, usage ledger and reconciliation flow.
+6. Customer catalog, first-workspace onboarding, order history and order-detail UI are committed. Add admin catalog/operations UI, usage ledger and reconciliation flow.
 7. Configure sandbox credentials and run sandbox end-to-end; review privacy, terms, refunds, tax and support.
 8. Obtain explicit owner approval before remote D1 migration, production secrets, merchant production mode or deployment.
 
-Current status: Agent chat tool-calling, commercial D1 migration, seeded catalog, authenticated order APIs, Duitku invoice adapter and signed callback/entitlement flow are committed. These changes have NOT been typechecked, built, or run against local/sandbox D1 in this session. No remote migration, merchant secret, live invoice, production payment, or deployment has been performed. The customer storefront and admin operations UI remain pending.
+Current status: Agent tool-calling, commercial D1 migration, seeded catalog, authenticated order APIs, Duitku invoice adapter, signed callback/entitlement flow, customer package catalog, order history/detail UI, first-workspace onboarding, and optional Clerk auth integration are committed. Changes have NOT been typechecked, built, or run against local/sandbox D1 or a live Clerk instance in this session. No remote migration, Clerk secret, Duitku secret, invoice, production payment, or deployment has been performed. Admin operations UI, fulfillment/revision UI, usage ledger, and reconciliation UI remain pending.
