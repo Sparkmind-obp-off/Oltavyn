@@ -14,7 +14,7 @@ The Worker verifies the `Cf-Access-Jwt-Assertion` signature against the Cloudfla
 
 ## Cloudflare dashboard setup
 
-The Access application has already been created in the connected Cloudflare account as **OLTAVYN Command Center — Admin Only**. Its exact-email Allow policy is restricted to the connected Cloudflare account identity; its session duration is 8 hours and its Cloudflare identity provider is selected.
+The Access application has already been created in the connected Cloudflare account as **OLTAVYN Command Center — Admin Only**. Its exact-email Allow policy is restricted to the connected Cloudflare account identity; its session duration is 8 hours and its Cloudflare identity provider is selected. MFA is not yet enforced: the account-level two-factor enforcement setting is currently off, and independent Access MFA has not been enabled or enrolled. Enable MFA on the Cloudflare account before relying on this as the sole second factor, or configure independent Access MFA using the [Cloudflare MFA guide](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/mfa-requirements/).
 
 Protected destinations are:
 
