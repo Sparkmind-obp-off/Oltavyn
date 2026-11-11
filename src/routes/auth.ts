@@ -41,19 +41,19 @@ async function resolveClerkUser(c: any, claims: any) {
     throw new ApiError(403,'verified_google_email_required','Akun Google harus memiliki email utama terverifikasi.')
   const email=String(primary.email_address).toLowerCase()
   const display=[profile.first_name,profile.last_name].filter(Boolean).join(' ').slice(0,80)||null
-  let user=await c.env.DB.prepare("SELECT id,email,display_name FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first<any>()
+  let user=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first<any>()
   if(!user) {
     const existing=await c.env.DB.prepare('SELECT id,clerk_user_id,status FROM users WHERE email=?').bind(email).first<any>()
     if(existing) {
       if(existing.status!=='active') throw new ApiError(403,'account_disabled','Akun OLTAVYN ini tidak aktif. Hubungi dukungan.')
       if(existing.clerk_user_id && existing.clerk_user_id!==claims.sub) throw new ApiError(409,'identity_conflict','Email sudah terhubung ke identitas lain.')
       await c.env.DB.prepare('UPDATE users SET clerk_user_id=?,display_name=COALESCE(display_name,?) WHERE id=?').bind(claims.sub,display,existing.id).run()
-      user={id:existing.id,email,display_name:display}
+      user={id:existing.id,email,display_name:display,plan_tier:existing.plan_tier||'free',plan_status:existing.plan_status||'active'}
     } else {
       const id=newId('usr'),salt=randomToken(16),dummy=await hashPassword(randomToken(32),salt)
       await c.env.DB.prepare("INSERT INTO users (id,email,display_name,password_hash,password_salt,password_iterations,status,created_at,clerk_user_id) VALUES (?,?,?,?,?,?, 'active',?,?)")
         .bind(id,email,display,dummy,salt,PBKDF2_ITERATIONS,nowIso(),claims.sub).run()
-      user={id,email,display_name:display}
+      user={id,email,display_name:display,plan_tier:'free',plan_status:'active'}
       await audit(c.env.DB,{actor_user_id:id,action:'user.register.google',resource_type:'user',resource_id:id})
     }
   }
@@ -63,14 +63,17 @@ async function resolveClerkUser(c: any, claims: any) {
 }
 
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const clerkToken=getCookie(c,'__session')
-  if(clerkToken && c.env.CLERK_PUBLISHABLE_KEY && c.env.CLERK_JWT_PUBLIC_KEY && c.env.CLERK_SECRET_KEY) {
-    const claims=await verifyClerkToken(clerkToken,c)
-    const user=await resolveClerkUser(c,claims)
-    c.set('user',user)
-    await next(); return
-  }
-  throw new ApiError(503,'google_auth_required','Autentikasi Google OLTAVYN belum tersedia atau sesi Google telah berakhir.')\n}\n\n// CSRF defence: SameSite=Strict cookie + mutating requests must be JSON (forces CORS preflight cross-origin)
+  if (!c.env.CLERK_PUBLISHABLE_KEY || !c.env.CLERK_JWT_PUBLIC_KEY || !c.env.CLERK_SECRET_KEY)
+    throw new ApiError(503, 'google_auth_not_configured', 'Autentikasi Google OLTAVYN belum dikonfigurasi.')
+  const clerkToken = getCookie(c, '__session')
+  if (!clerkToken) throw new ApiError(401, 'unauthenticated', 'Silakan masuk menggunakan Google.')
+  const claims = await verifyClerkToken(clerkToken, c)
+  const user = await resolveClerkUser(c, claims)
+  c.set('user', user)
+  await next()
+}
+
+// CSRF defence: SameSite=Strict cookie + mutating requests must be JSON (forces CORS preflight cross-origin)
 // + Origin, when present, must match the host.
 export const csrfGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
