@@ -305,7 +305,7 @@ const head = (title, desc, actions = '') => html`<div class="page-head"><div><h1
 async function pageCommercial(main) {
   main.innerHTML = html`${head('Paket & Pesanan', 'Pilih bantuan yang dibutuhkan, buat pesanan, lalu lanjutkan pembayaran dengan aman.')}
     <div class="card"><div class="journey-steps"><span class="journey-active">1 · Pilih paket</span><span>2 · Konfirmasi pesanan</span><span>3 · Pembayaran</span><span>4 · Pengerjaan</span></div>
-    <p class="small muted">Harga dan ruang lingkup dikunci dari katalog server saat pesanan dibuat. Pembayaran hanya dianggap berhasil setelah callback Duitku diverifikasi server.</p></div>
+    <p class="small muted">Harga dan ruang lingkup dikunci dari katalog server saat pesanan dibuat. Paket bulanan ditagih per periode secara manual, bukan auto-renew. Pembayaran hanya dianggap berhasil setelah callback Duitku diverifikasi server.</p></div>
     <div data-catalog class="grid grid-3"><div class="card">${skeleton(3)}</div></div>
     <div class="card" style="margin-top:18px"><div class="spread"><div><h2>Riwayat pesanan</h2><p class="small muted">Pesanan di seluruh workspace milik akun ini.</p></div><button class="btn btn-ghost btn-sm" id="orders-refresh">Muat ulang</button></div><div data-orders><p class="muted">Memuat pesanan…</p></div></div>`.s
   const catalogEl = $('[data-catalog]', main), ordersEl = $('[data-orders]', main)
@@ -321,7 +321,7 @@ async function pageCommercial(main) {
   }
   try {
     const d=await api('GET','/commercial/catalog')
-    catalogEl.innerHTML=d.catalog.map(item=>html`<article class="card package-card"><div class="package-kicker">OLTAVYN SERVICE</div><h2>${item.name}</h2><p class="muted">${item.description}</p><div class="package-price">${money(item.price_idr)} <small>${item.billing_type==='monthly'?'/ bulan':'/ sekali'}</small></div><h3>Termasuk</h3><ul>${item.deliverables.map(x=>html`<li>${x}</li>`)}</ul><details><summary>Batasan layanan</summary><ul>${item.exclusions.map(x=>html`<li>${x}</li>`)}</ul></details><button class="btn btn-primary" data-buy="${item.sku}" style="width:100%;margin-top:14px">Pilih paket</button></article>`).map(x=>x.s).join('')
+    catalogEl.innerHTML=d.catalog.map(item=>html`<article class="card package-card"><div class="package-kicker">OLTAVYN SERVICE</div><h2>${item.name}</h2><p class="muted">${item.description}</p><div class="package-price">${money(item.price_idr)} <small>${item.billing_type==='monthly'?'/ bulan · perpanjangan manual':'/ sekali'}</small></div><h3>Termasuk</h3><ul>${item.deliverables.map(x=>html`<li>${x}</li>`)}</ul><details><summary>Batasan layanan</summary><ul>${item.exclusions.map(x=>html`<li>${x}</li>`)}</ul></details><button class="btn btn-primary" data-buy="${item.sku}" style="width:100%;margin-top:14px">Pilih paket</button></article>`).map(x=>x.s).join('')
     $('[data-buy]',catalogEl).forEach(b=>b.onclick=async()=>{
       const item=d.catalog.find(x=>x.sku===b.dataset.buy)
       dialog({title:'Konfirmasi pesanan',body:html`<p>Anda akan memesan <strong>${item.name}</strong>.</p><p>Total: <strong>${money(item.price_idr)}</strong></p><p>Workspace: <strong>${ws()?.name||'—'}</strong></p><p class="small muted">Pembayaran belum dilakukan. Pesanan akan dibuat menggunakan harga dan deliverables dari katalog OLTAVYN.</p><label class="l" for="order-note">Catatan tambahan (opsional)</label><textarea id="order-note" maxlength="1000" placeholder="Konteks, target audiens, atau kebutuhan khusus"></textarea>`,submitLabel:'Buat pesanan',onSubmit:async()=>{
