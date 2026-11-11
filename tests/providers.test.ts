@@ -19,7 +19,7 @@ async function rejects(p: Promise<unknown>, code: string, name: string) {
 
 console.log('Status & kill switch')
 let s = providerStatus({})
-ok(s.every((p) => p.state === 'unconfigured'), 'all unconfigured without secrets')
+ok(s.filter((p) => p.id !== 'scrapely').every((p) => p.state === 'unconfigured') && s.find((p) => p.id === 'scrapely')!.state === 'endpoint_unverified', 'providers unconfigured and Scrape.ly endpoint locked by default')
 s = providerStatus({ GROQ_API_KEY: SECRET })
 ok(s.find((p) => p.id === 'groq')!.state === 'configured_unverified', 'secret present = configured_unverified (not validated)')
 ok(!JSON.stringify(s).includes(SECRET), 'status never contains secret')
