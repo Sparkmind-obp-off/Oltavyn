@@ -50,8 +50,9 @@ async function resolveClerkUser(c: any, claims: any) {
     throw new ApiError(403,'verified_email_required','Akun Clerk harus memiliki email utama yang terverifikasi.')
   const email=String(primary.email_address).toLowerCase()
   const display=[profile.first_name,profile.last_name].filter(Boolean).join(' ').slice(0,80)||null
-  const existing=await c.env.DB.prepare('SELECT id,clerk_user_id FROM users WHERE email=?').bind(email).first<any>()
+  const existing=await c.env.DB.prepare('SELECT id,clerk_user_id,status FROM users WHERE email=?').bind(email).first<any>()
   if(existing) {
+    if(existing.status!=='active') throw new ApiError(403,'account_disabled','Akun OLTAVYN ini tidak aktif. Hubungi dukungan.')
     if(existing.clerk_user_id && existing.clerk_user_id!==claims.sub) throw new ApiError(409,'identity_conflict','Email sudah terhubung ke identitas lain.')
     await c.env.DB.prepare('UPDATE users SET clerk_user_id=?,display_name=COALESCE(display_name,?) WHERE id=?').bind(claims.sub,display,existing.id).run()
     user={id:existing.id,email,display_name:display}
