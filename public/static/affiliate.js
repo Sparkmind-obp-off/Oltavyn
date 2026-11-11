@@ -164,19 +164,103 @@ async function loadChannels() {
   } catch (e) { el.innerHTML = `<p class="msg bad">${esc(e.message)}</p>` }
 }
 
-// ---------- Providers ----------
-const STATE_ID = { unconfigured: ['Belum dikonfigurasi', 'warn'], configured_unverified: ['Terkonfigurasi (belum divalidasi)', ''], disabled: ['Dinonaktifkan', 'bad'] }
+// ---------- Multi-Provider Hub ----------
+const STATE_ID = {
+  unconfigured: ['Belum dikonfigurasi', 'warn'],
+  configured_unverified: ['Secret terpasang · belum divalidasi', ''],
+  endpoint_unverified: ['Endpoint belum diverifikasi', 'warn'],
+  disabled: ['Dinonaktifkan', 'bad'],
+}
+const PROVIDER_NAMES = { groq: 'Groq', tavily: 'Tavily', apify: 'Apify', scrapely: 'Scrape.ly' }
+async function loadProviderUsage() {
+  const el = $('#provider-usage')
+  try {
+    const d = await api('GET', '/affiliate/providers/usage')
+    el.innerHTML = '<strong>Aktivitas 30 hari (berdasarkan audit log)</strong><div class="grid">' +
+      Object.entries(d.usage).map(([id, v]) => '<div class="item"><strong>' + esc(PROVIDER_NAMES[id] || id) + '</strong><div>' + esc(v.calls_30d) + ' panggilan</div><div class="muted small">' + (v.last_called_at ? 'Terakhir: ' + esc(v.last_called_at) : 'Belum ada panggilan') + '</div></div>').join('') +
+      '</div><p class="small muted">' + esc(d.note) + '</p>'
+  } catch (e) { el.textContent = 'Ringkasan penggunaan belum tersedia: ' + e.message }
+}
 async function loadProviders() {
-  const el = $('#providers'); el.innerHTML = '<p class="loading">Memuat…</p>'
+  const el = $('#providers'); el.innerHTML = '<p class="loading">Memuat status…</p>'
   try {
     const d = await api('GET', '/affiliate/providers')
-    el.innerHTML = `<p class="small muted">${esc(d.note)}</p>` + d.providers.map((p) => `<div class="item"><div class="spread"><strong>${esc(p.id)}</strong><span class="pill ${STATE_ID[p.state][1]}">${esc(STATE_ID[p.state][0])}</span></div><div class="small">${esc(p.purpose)}</div><div class="small muted">Biaya: ${esc(p.billing_note)}</div>${p.allowed_actors ? `<div class="small muted">Actor diizinkan: ${p.allowed_actors.length ? esc(p.allowed_actors.join(', ')) : 'tidak ada'}</div>` : ''}</div>`).join('')
-    const st = Object.fromEntries(d.providers.map((p) => [p.id, p.state]))
-    $('#groq-form button').disabled = st.groq !== 'configured_unverified'
-    $('#tavily-form button').disabled = st.tavily !== 'configured_unverified'
-  } catch (e) { el.innerHTML = `<p class="msg bad">${esc(e.message)}</p>` }
+    el.innerHTML = '<p class="small muted">' + esc(d.note) + '</p><div class="grid">' + d.providers.map((p) => {
+      const meta = STATE_ID[p.state] || ['Status tidak dikenal', 'warn']
+      return '<div class="item"><div class="spread"><strong>' + esc(PROVIDER_NAMES[p.id] || p.id) + '</strong><span class="pill ' + meta[1] + '">' + esc(meta[0]) + '</span></div>' +
+        '<div class="small">' + esc(p.purpose) + '</div><div class="small muted">Catatan biaya: ' + esc(p.billing_note) + '</div>' +
+        (p.allowed_actors ? '<div class="small muted">Allowlist: ' + (p.allowed_actors.length ? esc(p.allowed_actors.join(', ')) : 'kosong — Actor tidak dapat dijalankan') + '</div>' : '') +
+        (p.id === 'scrapely' ? '<div class="small muted">Endpoint: ' + (p.endpoint_ready ? 'dikonfigurasi, belum tervalidasi' : 'belum dikonfigurasi') + '</div>' : '') +
+        '</div>'
+    }).join('') + '</div>'
+    const byId = Object.fromEntries(d.providers.map((p) => [p.id, p]))
+    const can = (id) => !!byId[id] && byId[id].enabled && byId[id].state === 'configured_unverified'
+    $('#groq-form button').disabled = !can('groq')
+    $('#tavily-form button').disabled = !can('tavily')
+    $('#apify-form button').disabled = !can('apify') || !(byId.apify.allowed_actors || []).length
+    $('#scrapely-form button').disabled = !can('scrapely') || !(byId.scrapely.allowed_actors || []).length
+    if (byId.scrapely.state === 'endpoint_unverified') $('#scrapely-result').textContent = 'Dikunci: SCRAPELY_BASE_URL dan SCRAPELY_RUN_PATH belum disiapkan berdasarkan dokumentasi resmi.'
+    else if (!can('scrapely')) $('#scrapely-result').textContent = 'Scrape.ly belum siap. Periksa secret, kill switch, endpoint, dan allowlist.'
+  } catch (e) { el.innerHTML = '<p class="msg bad">' + esc(e.message) + '</p>' }
+  await loadProviderUsage()
 }
-
+function parseActorInput(form) {
+  const raw = form.elements.input_json.value.trim()
+  if (!raw) return {}
+  const value = JSON.parse(raw)
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Input Actor harus berupa JSON object.')
+  return value
+}
+$('#refresh-providers').onclick = () => withBusy($('#refresh-providers'), loadProviders)
+$('#groq-form').onsubmit = (e) => {
+  e.preventDefault()
+  const out = $('#groq-result'); out.textContent = 'Mengirim prompt ke Groq…'
+  withBusy(e.submitter, async () => {
+    try {
+      const d = await api('POST', '/affiliate/providers/groq/generate', formValues(e.target))
+      out.textContent = '[' + d.label + ']\nModel: ' + d.model + '\nToken: ' + (d.usage?.total_tokens ?? 'tidak tersedia') + '\n\n' + (d.text || 'Tidak ada teks.')
+      await loadProviderUsage()
+    } catch (err) { out.textContent = err.message }
+  })
+}
+$('#tavily-form').onsubmit = (e) => {
+  e.preventDefault()
+  const out = $('#tavily-result'); out.textContent = 'Mencari sumber publik…'
+  withBusy(e.submitter, async () => {
+    try {
+      const d = await api('POST', '/affiliate/providers/tavily/search', formValues(e.target))
+      out.innerHTML = '<p class="small muted">' + esc(d.note) + '</p>' + (d.results.length ? d.results.map((x) =>
+        '<div class="item"><a href="' + esc(x.url) + '" target="_blank" rel="noopener noreferrer"><strong>' + esc(x.title) + '</strong></a><p class="small">' + esc(x.excerpt) + '</p><div class="small muted">Diambil ' + esc(x.captured_at.slice(0, 10)) + (x.published_date ? ' · terbit ' + esc(x.published_date) : '') + ' · petunjuk belum ditinjau</div></div>'
+      ).join('') : '<p>Tidak ada hasil.</p>')
+      await loadProviderUsage()
+    } catch (err) { out.textContent = err.message }
+  })
+}
+for (const id of ['apify', 'scrapely']) {
+  const form = $('#' + id + '-form'), out = $('#' + id + '-result')
+  form.onsubmit = (e) => {
+    e.preventDefault()
+    const checkbox = $('#' + (id === 'apify' ? 'a-confirm' : 's-confirm'))
+    if (!checkbox.checked) { show('Persetujuan eksekusi wajib dicentang.', true); return }
+    let actorInput
+    try { actorInput = parseActorInput(form) } catch (err) { show(err.message, true); return }
+    const providerName = PROVIDER_NAMES[id]
+    if (!confirm('Konfirmasi satu eksekusi ' + providerName + '? Eksekusi dapat memakai saldo/kredit provider dan tidak ada batas belanja otomatis.')) return
+    out.textContent = 'Mengirim satu eksekusi…'
+    withBusy(e.submitter, async () => {
+      try {
+        const d = await api('POST', '/affiliate/providers/' + id + '/run', {
+          actor_id: form.elements.actor_id.value.trim(),
+          input: actorInput,
+          confirm_run: true,
+        })
+        out.textContent = JSON.stringify(d, null, 2) + '\n\nStatus: baru dikirim. Hasil dataset belum diimpor ke workspace.'
+        checkbox.checked = false
+        await loadProviders()
+      } catch (err) { out.textContent = err.message }
+    })
+  }
+}
 // ---------- Boot ----------
 async function boot() {
   try {
