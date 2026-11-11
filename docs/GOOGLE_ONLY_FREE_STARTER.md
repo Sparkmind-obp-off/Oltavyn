@@ -8,7 +8,8 @@ All customers use Google Sign-In only. A verified Google account creates or link
 - Workspace allowance: one, enforced server-side.
 - No payment card, no auto-renewal, no expiry.
 - Core workflow and manually entered data are available.
-- Paid external research, Actors, production service and other provider-cost operations are excluded unless a separately approved allowance or paid package is introduced.
+- Up to 5 AI requests per day across Agent chat and direct Groq generation (shared daily limit); read-only Agent runs are limited to 20/day.
+- Tavily, Apify, Scrape.ly and other external provider-credit operations are excluded.
 
 ## Customer journey
 1. Visitor opens the public pricing page.
