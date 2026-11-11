@@ -12,6 +12,7 @@
     "db:reset:local": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local",
     "test:smoke": "node tests/smoke.mjs",
     "test:affiliate": "node tests/affiliate-smoke.mjs",
+    "test:agent-tools": "esbuild tests/agent-tool-calling.test.ts --bundle --platform=node --format=esm --log-level=warning --outfile=.tmp/agent-tool-calling.test.mjs && node .tmp/agent-tool-calling.test.mjs",
     "test:providers": "esbuild tests/providers.test.ts --bundle --platform=node --format=esm --log-level=warning --outfile=.tmp/providers.test.mjs && node .tmp/providers.test.mjs",
     "test:all": "npm run typecheck && npm run build && npm run db:migrate:local && npm run test:providers && npm run test:smoke && npm run test:affiliate",
     "deploy:prod": "npm run build && wrangler pages deploy dist --project-name oltavyn --branch main"
