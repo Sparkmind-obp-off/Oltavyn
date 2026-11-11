@@ -26,11 +26,11 @@ Unknown values must remain unknown (NULL), not zero. Hypotheses must be labelled
 
 ## 2. Release and repository policy
 
-- Work directly on `feat/faceless-affiliate-factory-phase1`; keep PR #1 Draft until gates pass.
+- Work directly on `feat/faceless-affiliate-factory-phase1`; no CI workflows. Merge/release only after the owner-requested direct-production release gate is reviewed.
 - Push reviewable commits to GitHub.
 - **Do not use GitHub Actions, CI/CD, workflow YAML, or automated deployment workflows.** The existing `.github/workflows/verify.yml` and proposed workflow artifacts are removed by owner instruction.
 - Use manual commands from `docs/MANUAL_RELEASE_AND_PROVIDER_RUNBOOK.md`.
-- Do not merge, deploy production, change production bindings, run production migrations, or change custom domains without separate explicit approval.
+- Owner has explicitly requested direct production setup (no preview). The production D1 database, binding, and migrations are now authorized and have been configured. Production code deployment and production smoke tests must still be verified carefully; do not claim completion until live checks pass.
 - Never say a command passed unless its actual output was observed.
 - No paid API, Actor, subscription, credit, proxy, or provider action without clear disclosure and explicit approval.
 
@@ -45,12 +45,7 @@ The temporary `oltavyn-preview` database was deleted after the owner directed th
 
 The feature branch Wrangler config now points directly to this production database. The previous production UUID `94c9a84b-7fa8-49a4-b9f2-8006450a767b` was not found (7404); old data has not been recovered. Do not claim old accounts/workspaces are restored.
 
-Next:
-1. Verify the preview binding in the Pages project after a preview deployment.
-2. Apply ordered migrations 0001–0003 only to `oltavyn-preview`.
-3. Verify authentication end-to-end against preview D1: registration, login, session cookie persistence, authenticated API access, workspace creation, logout, invalid/expired session, CSRF/origin protection, rate limits and workspace isolation.
-4. Use a dedicated test account and clean its data from preview only.
-5. Investigate whether the old production database can be undeleted/restored before proposing a replacement production database.
+Production migrations 0001–0003 have been applied to the new production D1 and independently verified by table listing, migration ledger, and `PRAGMA foreign_key_check`. The Pages project's production DB binding was updated to the new UUID. The currently deployed Pages version is still the older deployment until a new production deployment is made. Authentication against the new production DB has not yet been smoke-tested.
 
 A healthy `/api/health` response alone does not prove database or authentication readiness.
 
