@@ -24,7 +24,7 @@ async function loadKeys(teamDomain: string): Promise<AccessJwk[]> {
   return data.keys
 }
 
-async function verifyAccessToken(token: string, teamDomain: string, audiencesAllowed: string[]) {
+export async function verifyAccessToken(token: string, teamDomain: string, audiencesAllowed: string[]) {
   const parts = token.split('.')
   if (parts.length !== 3) throw new ApiError(403, 'access_invalid', 'Token Cloudflare Access tidak valid.')
   let header: { alg?: string; kid?: string }, claims: AccessClaims
