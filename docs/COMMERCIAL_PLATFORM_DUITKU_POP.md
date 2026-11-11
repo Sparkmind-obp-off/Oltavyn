@@ -1,6 +1,6 @@
 # OLTAVYN Commercial Platform & Duitku POP Integration Contract
 
-Status: implementation specification; payment integration is NOT enabled yet.
+Status: commercial API + additive schema committed; Duitku remains sandbox/configuration-gated and is NOT production-enabled.
 Date: 2026-11-11
 Scope: same OLTAVYN application and D1 database; no second product or separate chatbot.
 Principles: Rp0-first, Cloudflare-first, no secret in source control, no production migration/deployment without explicit approval.
@@ -32,19 +32,7 @@ Future self-service subscriptions are a separate validation phase. Do not publis
 
 ## 3. Commercial data model (additive migration only)
 
-Inspect existing schema and avoid duplicate concepts before creating tables. Proposed entities:
-- catalog_products: sku, name, description, product_type, active, sort_order, timestamps.
-- catalog_prices: product_id, currency, amount_minor, billing_interval, effective dates.
-- catalog_deliverables: product_id, key, description, quantity, unit, constraints.
-- customer_workspaces: workspace_id, billing_owner_user_id, display/business profile.
-- orders: public order number, workspace/user owner, status, subtotal, discount, total, currency, immutable item snapshot, timestamps.
-- order_items: order/product/price snapshot, quantity, unit amount, total, scope snapshot.
-- payments: order_id, provider, provider_reference, merchant_order_id, amount, status, payment_url, expiry, callback metadata hash, timestamps.
-- payment_events: provider event identity/hash, verified flag, event type, safe metadata, received time; idempotent.
-- entitlements: workspace, product/plan, source order, status, limits, start/end, granted/revoked timestamps.
-- usage_ledger: workspace, entitlement, capability, quantity, source job, timestamp.
-- service_jobs: order, workspace, job type, status, assigned operator, brief, deliverables, review/revision state.
-- invoices: invoice number, order/subscription reference, due date, status.
+Implemented in `migrations/0006_commercial_platform.sql` as additive tables: `commercial_catalog`, `commercial_orders`, `commercial_order_items`, `commercial_payments`, `commercial_payment_events`, `commercial_entitlements`, and `commercial_service_jobs`. Existing `users` and owner-scoped `workspaces` are reused. Three initial service SKUs are seeded as editable catalog rows. Admin CRUD, usage ledger, invoice documents and customer-facing UI are still pending.
 
 Money is stored as integer IDR. Keep the immutable purchased scope/price snapshot on order items so later catalog edits cannot rewrite an existing order.
 
@@ -55,7 +43,7 @@ Official documentation: https://docs.duitku.com/pop/id/
 Create invoice:
 - POST https://api-prod.duitku.com/api/merchant/createInvoice
 - Sandbox: https://api-sandbox.duitku.com/api/merchant/createInvoice
-- JSON body includes paymentAmount, merchantOrderId, productDetails, email, returnUrl and callbackUrl; use optional itemDetails/customerDetail only when needed.
+- JSON body includes paymentAmount, merchantOrderId, productDetails, email, returnUrl and callbackUrl; `itemDetails` is sent and its total is kept equal to paymentAmount.
 - Headers: Content-Type, x-duitku-timestamp (Unix milliseconds), x-duitku-signature, x-duitku-merchantcode.
 - Create-invoice signature: HMAC-SHA256(merchantCode + timestamp, API key).
 - Persist returned reference and paymentUrl. Duitku documents repeated identical merchantOrderId requests can return the same response within a five-minute window; do not create duplicate orders or spam invoice requests.
@@ -69,10 +57,11 @@ Callback:
 - JS callback and returnUrl are UI signals only. Never grant entitlement or mark an order paid from browser parameters.
 - Reconcile ambiguous/pending states against Duitku's server-side transaction status/query facility before granting access.
 
-Credentials must exist only as Cloudflare Worker secrets. Proposed names, subject to verification against the merchant project:
+Credentials must exist only as Cloudflare Worker secrets. Secret names (set only after merchant project details are confirmed):
 - DUITKU_MERCHANT_CODE
 - DUITKU_API_KEY
-- DUITKU_BASE_URL (optional; defaults to production only after merchant activation)
+- DUITKU_BASE_URL (optional; defaults to sandbox; only sandbox and production official hosts are accepted)
+- PUBLIC_APP_URL (optional canonical HTTPS origin; defaults to the OLTAVYN Pages origin)
 - DUITKU_CALLBACK_URL and DUITKU_RETURN_URL should be derived from configured canonical origin, not user input.
 
 Never put the API key in frontend JavaScript, HTML, D1, logs, GitHub or chat. Never accept arbitrary callback/return URLs from the client.
@@ -89,7 +78,7 @@ Customer:
 - GET /commercial/orders/:id/status (database state only)
 
 Provider:
-- POST /webhooks/duitku/pop (public route; signature + amount + merchant + reference verification; idempotent event processing)
+- POST /api/webhooks/duitku/pop (public route; signature + amount + merchant + reference verification; idempotent event processing)
 - Optional admin-only reconciliation endpoint; never expose secret or raw provider errors.
 
 Admin:
@@ -132,12 +121,13 @@ Customer-facing Agent tools must additionally check entitlement and remaining qu
 
 ## 8. Implementation gates
 
-1. Complete agent tool-calling integration and run typecheck/build/tests.
-2. Inspect D1 migrations and authentication roles before commercial schema work.
-3. Add local-only migration and tests for order snapshot, pricing, ownership, idempotency and entitlement.
-4. Implement Duitku adapter with mocked tests for signature, callback, amount mismatch, replay and duplicate callback.
-5. Verify sandbox merchant credentials and test sandbox end-to-end.
-6. Review privacy policy, terms, refund policy, tax and customer support process.
-7. Obtain explicit owner approval before remote D1 migration, production secrets, merchant production mode or deployment.
+1. Agent tool-calling and four read-only tools are committed; build/typecheck/tests still need execution.
+2. Additive commercial schema and initial catalog seed are committed; remote migration is not applied.
+3. Authenticated APIs exist for catalog, order creation/list/detail and Duitku checkout; prices and scope are server-resolved and snapshotted.
+4. Public Duitku callback route verifies HMAC, merchant, amount and reference; successful callbacks idempotently grant entitlements and queue service jobs.
+5. Add local migration and mocked tests for order snapshot, pricing, ownership, checkout idempotency, signature, callback replay and entitlement idempotency.
+6. Add customer-facing storefront/order UI, admin catalog/operations UI, usage ledger and reconciliation flow.
+7. Configure sandbox credentials and run sandbox end-to-end; review privacy, terms, refunds, tax and support.
+8. Obtain explicit owner approval before remote D1 migration, production secrets, merchant production mode or deployment.
 
-Current status: Agent chat tool-calling has been connected to the existing four R0 tools in source control. Commercial catalog, orders, Duitku checkout/webhook, entitlement and service-job implementation remain pending; no payment is currently accepted by OLTAVYN.
+Current status: Agent chat tool-calling, commercial D1 migration, seeded catalog, authenticated order APIs, Duitku invoice adapter and signed callback/entitlement flow are committed. These changes have NOT been typechecked, built, or run against local/sandbox D1 in this session. No remote migration, merchant secret, live invoice, production payment, or deployment has been performed. The customer storefront and admin operations UI remain pending.
