@@ -134,3 +134,13 @@ OLTAVYN is being extended as an internal-first, hybrid Faceless Affiliate Conten
 - Phase 1 schema: [migrations/0002_affiliate_factory.sql](migrations/0002_affiliate_factory.sql)
 
 The Phase 1 changes are being prepared on branch `feat/faceless-affiliate-factory-phase1`. Do not assume the migration has been applied or deployed until local verification and owner-approved release steps are complete. No paid providers or paid scraping are enabled.
+
+
+## Product architecture and first operating product
+
+- **Product boundaries:** [docs/PRODUCT_BOUNDARIES.md](docs/PRODUCT_BOUNDARIES.md) — AVORLUNE business, OLTAVYN Core Engine, and Affiliate OS.
+- **Affiliate OS workbench:** open `/affiliate` after signing in to OLTAVYN.
+- **Provider integrations:** [docs/PROVIDER_INTEGRATIONS.md](docs/PROVIDER_INTEGRATIONS.md) — Groq, Tavily, Apify, and Scrape.ly setup, costs, and safety.
+- **Implementation and release gates:** [docs/affiliate-factory/PHASE_2_STATUS.md](docs/affiliate-factory/PHASE_2_STATUS.md).
+
+The Affiliate OS workbench and provider adapters currently exist on the feature branch only. They are not live on `oltavyn.pages.dev` until this PR is verified, merged, and separately deployed. No provider credentials are configured by this repository.
