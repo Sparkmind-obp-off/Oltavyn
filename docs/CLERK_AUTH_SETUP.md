@@ -45,7 +45,9 @@ Free Starter currently includes:
 - Permanent Rp0 baseline access; no expiry and no payment card.
 - One workspace per account (enforced by the server).
 - Core OLTAVYN workflow and manual data entry.
-- No paid external Actor execution or provider-credit allowance is included.
+- Up to 5 AI requests per day across Agent chat and direct Groq generation (shared daily limit).
+- Agent read-only runs are limited to 20 per day.
+- Tavily, paid Actors and other external provider-credit operations are excluded.
 - Service packages, production work and provider costs remain separately priced.
 
 This is a permanent entry plan, not a time-limited premium trial. Do not advertise unlimited AI, web research, scraping or video generation. Per-feature usage metering and additional quotas must be implemented before promising numeric monthly limits.
