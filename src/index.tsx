@@ -41,9 +41,56 @@ const affiliateShell=`<!doctype html><html lang="id"><head><meta charset="utf-8"
 <div class="card"><div class="spread"><h2>Channel Registry</h2><label class="row small"><input type="checkbox" id="channel-archived" style="width:auto"> Tampilkan arsip</label></div><div id="channels"></div></div>
 </div></section>
 <section data-panel="providers" role="tabpanel" class="hide">
-<div class="card"><h2>Status provider & biaya</h2><p class="small muted">Provider opsional. Semua alur manual berfungsi tanpa kunci API. Kebijakan biaya: Rp0 — tidak ada eksekusi berbayar tanpa persetujuan pemilik.</p><div id="providers"></div></div>
-<div class="cols"><div class="card"><h2>Draf LLM · Groq</h2><form id="groq-form"><div class="field"><label for="g-prompt">Prompt</label><textarea id="g-prompt" name="prompt" required maxlength="12000" placeholder="Buat 3 hook video faceless. Jangan mengarang klaim produk."></textarea></div><div class="field"><label for="g-model">Model</label><input id="g-model" name="model" value="llama-3.3-70b-versatile"></div><button class="btn">Buat draf</button></form><pre id="groq-result" aria-live="polite"></pre></div>
-<div class="card"><h2>Riset · Tavily</h2><form id="tavily-form"><div class="field"><label for="t-q">Query</label><input id="t-q" name="query" required maxlength="400" placeholder="masalah penyimpanan dapur kos"></div><button class="btn">Cari sumber</button></form><div id="tavily-result" aria-live="polite"></div></div></div>
+<div class="card">
+  <div class="spread"><div><h2>Multi-Provider Hub</h2><p class="small muted">Satu pusat kendali untuk provider riset, AI generation, dan Actor. Provider hanya alat bantu; OLTAVYN tetap menjadi sumber data dan alur persetujuan.</p></div><button class="btn btn-ghost btn-sm" id="refresh-providers">Perbarui status</button></div>
+  <div id="providers"><p class="loading">Memuat status provider…</p></div>
+  <div id="provider-usage" class="small muted" aria-live="polite"></div>
+</div>
+<div class="card">
+  <h3>Aturan aktivasi dan biaya</h3>
+  <ul class="small">
+    <li>Secret hanya dipasang di Cloudflare Pages → Settings → Variables and Secrets. Jangan masukkan API key ke formulir ini, GitHub, atau chat.</li>
+    <li>Status <strong>terkonfigurasi</strong> bukan berarti API key sudah tervalidasi. Groq/Tavily perlu uji request; Actor perlu persetujuan setiap eksekusi.</li>
+    <li>Apify/Scrape.ly bisa memakai kredit atau saldo. Allowlist Actor bukan batas biaya. Periksa harga Actor dan usage dashboard sebelum menekan eksekusi.</li>
+    <li>Biaya/token aktual tidak bisa dihitung oleh OLTAVYN saat ini. Panel menampilkan jumlah panggilan audit, bukan saldo atau tagihan.</li>
+    <li>Scrape.ly tetap terkunci sampai base URL dan pola endpoint run resmi ditinjau dan dikonfigurasi oleh operator.</li>
+  </ul>
+</div>
+<div class="cols">
+  <div class="card">
+    <h3>Groq · AI draft generation</h3><p class="small muted">Menghasilkan draf teks. Tidak menyimpan atau menerbitkan otomatis.</p>
+    <form id="groq-form">
+      <div class="field"><label for="g-prompt">Instruksi / prompt</label><textarea id="g-prompt" name="prompt" required maxlength="12000" placeholder="Buat 3 hook video faceless berdasarkan bukti yang saya berikan. Tandai klaim yang belum terbukti."></textarea></div>
+      <div class="field"><label for="g-model">Model Groq</label><input id="g-model" name="model" value="llama-3.3-70b-versatile" maxlength="100"></div>
+      <button class="btn" type="submit" disabled>Buat draf</button>
+    </form><pre id="groq-result" aria-live="polite">Menunggu konfigurasi provider…</pre>
+  </div>
+  <div class="card">
+    <h3>Tavily · Web research</h3><p class="small muted">Mencari sumber publik. Hasil menjadi petunjuk riset, bukan klaim terverifikasi.</p>
+    <form id="tavily-form">
+      <div class="field"><label for="t-q">Kata kunci / pertanyaan riset</label><input id="t-q" name="query" required maxlength="400" placeholder="masalah penyimpanan dapur kos di Indonesia"></div>
+      <button class="btn" type="submit" disabled>Cari sumber</button>
+    </form><div id="tavily-result" aria-live="polite"></div>
+  </div>
+  <div class="card">
+    <h3>Apify · Actor execution</h3><p class="small muted">Hanya Actor yang sudah di-allowlist. Satu klik = satu run yang mungkin mengonsumsi kredit.</p>
+    <form id="apify-form">
+      <div class="field"><label for="a-actor">Actor ID (harus sudah diizinkan)</label><input id="a-actor" name="actor_id" required maxlength="180" placeholder="username/actor-name"></div>
+      <div class="field"><label for="a-input">Input Actor (JSON object)</label><textarea id="a-input" name="input_json" rows="5" maxlength="20000" placeholder='{"startUrls":[{"url":"https://example.com"}]}'></textarea></div>
+      <label class="check"><input id="a-confirm" type="checkbox" required> Saya sudah memeriksa Actor, sumber, terms, batas, dan potensi biayanya; saya menyetujui satu eksekusi ini.</label>
+      <button class="btn" type="submit" disabled>Jalankan satu Actor</button>
+    </form><pre id="apify-result" aria-live="polite">Menunggu konfigurasi dan allowlist…</pre>
+  </div>
+  <div class="card">
+    <h3>Scrape.ly · Actor execution</h3><p class="small muted">Integrasi dikunci secara default. Aktif hanya setelah endpoint resmi, autentikasi, input, dan skema harga diverifikasi.</p>
+    <form id="scrapely-form">
+      <div class="field"><label for="s-actor">Actor / task ID yang diizinkan</label><input id="s-actor" name="actor_id" required maxlength="180" placeholder="ID dari dashboard Scrape.ly"></div>
+      <div class="field"><label for="s-input">Input JSON object</label><textarea id="s-input" name="input_json" rows="5" maxlength="20000" placeholder="{}"></textarea></div>
+      <label class="check"><input id="s-confirm" type="checkbox" required> Saya menyetujui satu eksekusi setelah memeriksa biaya dan hak akses.</label>
+      <button class="btn" type="submit" disabled>Jalankan satu task</button>
+    </form><pre id="scrapely-result" aria-live="polite">Dikunci sampai endpoint resmi diverifikasi.</pre>
+  </div>
+</div>
 </section>
 </section></main><script src="/static/affiliate.js" defer></script></body></html>`
 app.get('/affiliate',(c)=>c.html(affiliateShell))
