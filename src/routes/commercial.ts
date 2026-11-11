@@ -98,7 +98,10 @@ api.post('/orders/:id/checkout', async c => {
   }
   const response = await fetch(cfg.base+'/api/merchant/createInvoice',{method:'POST',headers:{'Content-Type':'application/json','x-duitku-timestamp':timestamp,'x-duitku-signature':signature,'x-duitku-merchantcode':cfg.merchant},body:JSON.stringify(payload)})
   const data:any = await response.json().catch(()=>null)
-  if (!response.ok || !data?.paymentUrl || !data?.reference) throw new ApiError(502,'duitku_invoice_failed','Duitku belum berhasil membuat invoice.',{provider_status:response.status,provider_message:clean(data?.Message || data?.message,240)})
+  let paymentUrl: URL | null = null
+  try { paymentUrl = new URL(String(data?.paymentUrl || '')) } catch {}
+  const allowedPaymentHosts = cfg.base.includes('sandbox') ? ['app-sandbox.duitku.com'] : ['app-prod.duitku.com']
+  if (!response.ok || !paymentUrl || paymentUrl.protocol !== 'https:' || !allowedPaymentHosts.includes(paymentUrl.hostname) || !data?.reference) throw new ApiError(502,'duitku_invoice_failed','Duitku belum berhasil membuat invoice.',{provider_status:response.status,provider_message:clean(data?.Message || data?.message,240)})
   const paymentId = newId('pay'), now = nowIso()
   await c.env.DB.prepare("INSERT INTO commercial_payments (id,order_id,provider,merchant_order_id,reference,payment_method,payment_url,amount_idr,status,provider_payload_json,created_at,updated_at) VALUES (?,?,'duitku_pop',?,?,?,?,?,'pending',?,?,?)")
     .bind(paymentId,order.id,order.merchant_order_id,String(data.reference),clean(data.paymentMethod,40)||null,String(data.paymentUrl,2000),order.total_idr,JSON.stringify({statusCode:data.statusCode||null}),now,now).run()
@@ -112,12 +115,12 @@ export const duitkuWebhook = async (c: any) => {
   const form = await c.req.parseBody()
   const merchantCode = clean(form.merchantCode,80), amount = clean(form.amount,30), merchantOrderId = clean(form.merchantOrderId,120)
   const resultCode = clean(form.resultCode,20), reference = clean(form.reference,120), signature = clean(form.signature,256)
-  if (!merchantCode || !amount || !merchantOrderId || !signature || !/^\d+$/.test(amount)) return c.json({error:'invalid_callback'},400)
+  if (!merchantCode || !amount || !merchantOrderId || !reference || !signature || !/^\d+$/.test(amount)) return c.json({error:'invalid_callback'},400)
   const expected = await hmacHex(cfg.key,merchantCode+amount+merchantOrderId)
   const valid = safeEqual(signature.toLowerCase(),expected.toLowerCase()) && safeEqual(merchantCode,cfg.merchant)
   if (!valid) return c.json({error:'invalid_signature'},401)
   const payment = await c.env.DB.prepare("SELECT p.*,o.id AS order_id,o.workspace_id,o.user_id,o.status AS order_status FROM commercial_payments p JOIN commercial_orders o ON o.id=p.order_id WHERE p.merchant_order_id=? AND p.provider='duitku_pop'").bind(merchantOrderId).first<any>()
-  if (!payment || Number(amount)!==Number(payment.amount_idr) || (reference && payment.reference && reference!==payment.reference)) return c.json({error:'payment_mismatch'},409)
+  if (!payment || Number(amount)!==Number(payment.amount_idr) || reference!==payment.reference) return c.json({error:'payment_mismatch'},409)
   const eventKey = (reference || merchantOrderId)+':'+resultCode+':'+amount
   const now = nowIso()
   try {
@@ -141,7 +144,7 @@ export const duitkuWebhook = async (c: any) => {
     }
     await audit(c.env.DB,{workspace_id:payment.workspace_id,actor_user_id:null,action:'commercial.payment.verified',resource_type:'commercial_payment',resource_id:payment.id})
   } else {
-    await c.env.DB.prepare("UPDATE commercial_payments SET status=CASE WHEN ?='01' THEN 'pending' WHEN ?='02' THEN 'failed' ELSE 'expired' END,updated_at=? WHERE id=? AND status<>'paid'").bind(resultCode,resultCode,now,payment.id).run()
+    await c.env.DB.prepare("UPDATE undefined").bind(now,payment.id).run()
   }
   return c.json({ok:true})
 }
