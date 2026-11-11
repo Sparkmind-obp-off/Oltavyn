@@ -1,6 +1,6 @@
 import { Hono, type MiddlewareHandler } from 'hono'
 import { getCookie, deleteCookie } from 'hono/cookie'
-import { ApiError, AppEnv, audit, hashPassword, newId, nowIso, randomToken, rateLimit } from '../lib/core'
+import { ApiError, AppEnv, audit, hashPassword, newId, nowIso, randomToken, rateLimit, sha256Hex } from '../lib/core'
 
 const COOKIE = 'olt_session'
 
@@ -118,7 +118,7 @@ auth.post('/login', async c => {
 })
 auth.post('/logout', async c => {
   const token = getCookie(c, COOKIE)
-  if (token) await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(token).run().catch(() => {})
+  if (token) await c.env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(await sha256Hex(token)).run().catch(() => {})
   deleteCookie(c, COOKIE, { path: '/' })
   return c.json({ ok: true })
 })
