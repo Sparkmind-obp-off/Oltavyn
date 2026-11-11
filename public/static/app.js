@@ -225,7 +225,7 @@ function renderAuth(_mode = 'login', err = null) {
   </div>`.s
   if(clerkInstance){
     const slot=$('#clerk-auth');clerkAuthMounted=slot
-    clerkInstance.mountSignIn(slot,{fallbackRedirectUrl:'/',signUpUrl:'/'})
+    clerkInstance.mountSignIn(slot,{fallbackRedirectUrl:'/',signUpUrl:'/',appearance:{layout:{socialButtonsPlacement:'top',socialButtonsVariant:'blockButton'}}})
   }
 }
 
