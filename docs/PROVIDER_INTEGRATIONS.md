@@ -87,3 +87,24 @@ Before enabling production use:
 4. Test a low-cost request with an owner-approved limit and verify provider usage.
 5. Inspect logs to ensure secrets and sensitive tracking URLs are not recorded.
 6. Only then request approval for any production migration or deployment.
+
+
+## OLTAVYN Agent Live Chat
+
+Affiliate OS now includes a workspace-scoped interactive chat at the **AI Agent** tab.
+
+- Chat requests use Groq as the conversational model when configured.
+- The agent receives a bounded context snapshot of the active workspace, product candidates, channel registry, and recent messages.
+- Optional Tavily research is invoked only when the user checks the per-message research consent control. Results remain unverified leads and are included in the model context.
+- Apify and Scrape.ly are not automatically launched from chat. Actor runs remain in the Provider panel, with allowlist, explicit per-run confirmation, and spend/item/time limits.
+- Conversation history is stored in D1 tables created by migration `0004_agent_live_chat.sql`; records are scoped to the authenticated user and workspace and cascade-delete with the workspace.
+- The chat does not publish, approve, or mutate affiliate records. It provides analysis and next-step guidance; existing Affiliate OS screens remain the authoritative write/approval workflow.
+- This is interactive request/response chat, not token-streaming, voice, or a background autonomous agent.
+
+### Required migration
+
+Apply migration 0004 to the target D1 database before using the chat:
+```sh
+npx wrangler d1 migrations apply oltavyn-production --remote
+```
+Only run this after verifying the configured production database ID and taking the normal backup/rollback precautions. Do not run it against an unknown or stale database binding.
