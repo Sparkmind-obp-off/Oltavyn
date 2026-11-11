@@ -41,10 +41,9 @@ export function providerStatus(env: ProviderEnv) {
   return PROVIDERS.map((p) => {
     const configured = !!env[p.secret]
     const enabled = providerEnabled(env, p.id)
-    const endpointReady = p.id !== 'scrapely' || (baseUrl(env, 'scrapely').startsWith('https://'))
     return {
-      id: p.id, purpose: p.purpose, billing_note: p.billing, enabled, endpoint_ready: endpointReady,
-      state: !enabled ? 'disabled' : !endpointReady ? 'endpoint_unverified' : configured ? 'configured_unverified' : 'unconfigured',
+      id: p.id, purpose: p.purpose, billing_note: p.billing, enabled,
+      state: !enabled ? 'disabled' : configured ? 'configured_unverified' : 'unconfigured',
       ...(p.id === 'apify' || p.id === 'scrapely' ? { allowed_actors: allowedActors(env, p.id) } : {}),
     }
   })
