@@ -144,3 +144,19 @@ The Phase 1 changes are being prepared on branch `feat/faceless-affiliate-factor
 - **Implementation and release gates:** [docs/affiliate-factory/PHASE_2_STATUS.md](docs/affiliate-factory/PHASE_2_STATUS.md).
 
 The Affiliate OS workbench and provider adapters currently exist on the feature branch only. They are not live on `oltavyn.pages.dev` until this PR is verified, merged, and separately deployed. No provider credentials are configured by this repository.
+
+
+## Genspark implementation handoff and documentation pack
+
+Use [GENSPARK_FULLSTACK_IMPLEMENTATION_PROMPT.md](GENSPARK_FULLSTACK_IMPLEMENTATION_PROMPT.md) as the project-level instruction when handing the repository to Genspark.ai. It directs Genspark to inspect and implement the existing full-stack app rather than create a separate project, and includes product boundaries, provider adapters, security, QA, CI, cost controls and release gates.
+
+Operational and governance documents:
+- [Implementation gap audit](docs/IMPLEMENTATION_GAP_AUDIT.md)
+- [Provider review register](docs/PROVIDER_REVIEW_REGISTER.md)
+- [Security and privacy checklist](docs/SECURITY_PRIVACY_CHECKLIST.md)
+- [QA test matrix](docs/QA_TEST_MATRIX.md)
+- [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
+- [Release runbook](docs/RELEASE_RUNBOOK.md)
+- [Changelog](docs/CHANGELOG.md)
+
+These documents are an implementation baseline. Their statuses must be updated only from actual test output and verified provider/deployment evidence. No production migration, deployment, live provider call or paid Actor run is implied by documentation commits.
