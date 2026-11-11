@@ -2,7 +2,7 @@
 const $ = (s, r = document) => r.querySelector(s)
 const $$ = (s, r = document) => [...r.querySelectorAll(s)]
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
-const state = { ws: null, tab: 'overview', productId: null, rubric: null }
+const state = { ws: null, tab: 'overview', productId: null, rubric: null, agentConversationId: null }
 const SCORE_LABELS = { demand: 'Bukti permintaan (25%)', quality: 'Sinyal kualitas produk (20%)', commission: 'Potensi komisi (20%)', visual_potential: 'Potensi visual faceless (15%)', price_accessibility: 'Harga/keterjangkauan (10%)', seller_risk: 'Risiko penjual (10%, dibalik: 1 = risiko rendah)' }
 const STATUS_ID = { candidate: 'Kandidat', shortlisted: 'Shortlist', selected: 'Terpilih', rejected: 'Ditolak', archived: 'Diarsipkan', planned: 'Rencana', active: 'Aktif', paused: 'Jeda', unverified: 'Belum terverifikasi', verified: 'Terverifikasi', conflicting: 'Bertentangan' }
 const PLATFORM_ID = { shopee_video: 'Shopee Video', tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube', facebook: 'Facebook' }
@@ -34,7 +34,7 @@ function setTab(tab) {
   state.tab = tab
   $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)))
   $$('[data-panel]').forEach((p) => p.classList.toggle('hide', p.dataset.panel !== tab))
-  ;({ overview: loadOverview, products: loadProducts, channels: loadChannels, providers: loadProviders, detail: loadDetail })[tab]?.()
+  ;({ overview: loadOverview, products: loadProducts, channels: loadChannels, providers: loadProviders, detail: loadDetail, agent: loadAgent })[tab]?.()
 }
 
 // ---------- Overview ----------
@@ -164,6 +164,77 @@ async function loadChannels() {
   } catch (e) { el.innerHTML = `<p class="msg bad">${esc(e.message)}</p>` }
 }
 
+// ---------- OLTAVYN Agent Live Chat ----------
+function agentRenderMessages(messages) {
+  const el = $('#agent-messages')
+  if (!messages.length) {
+    el.innerHTML = '<div class="agent-empty"><strong>Mulai dari tujuanmu.</strong><p class="muted small">Contoh: “Bantu saya memilih produk affiliate untuk niche dapur kos dan susun langkah validasinya.”</p><div class="agent-prompts"><button class="prompt-chip" data-agent-prompt="Analisis kondisi workspace saya dan rekomendasikan langkah berikutnya.">Analisis workspace</button><button class="prompt-chip" data-agent-prompt="Bantu saya menyusun kriteria produk affiliate yang layak diuji.">Seleksi produk</button><button class="prompt-chip" data-agent-prompt="Buat 3 konsep video affiliate faceless 15 detik berdasarkan data produk yang tersedia.">Konsep konten</button></div></div>'
+    return
+  }
+  el.innerHTML = messages.map((m) => '<article class="agent-message ' + (m.role === 'user' ? 'user' : 'assistant') + '"><div class="agent-role">' + (m.role === 'user' ? 'Kamu' : 'OLTAVYN Agent') + '</div><div class="agent-message-body">' + esc(m.content).replace(/\n/g, '<br>') + '</div>' + (m.metadata?.provider ? '<div class="agent-meta">' + esc(m.metadata.provider) + (m.metadata.research_leads ? ' · ' + esc(m.metadata.research_leads) + ' sumber riset' : '') + '</div>' : '') + '</article>').join('')
+  el.scrollTop = el.scrollHeight
+}
+async function loadAgentConversations() {
+  const el = $('#agent-conversations')
+  try {
+    const d = await api('GET', '/affiliate/agent/conversations?workspace_id=' + encodeURIComponent(state.ws))
+    el.innerHTML = d.conversations.length ? d.conversations.map((x) => '<button class="agent-conversation ' + (x.id === state.agentConversationId ? 'active' : '') + '" data-agent-conversation="' + esc(x.id) + '">' + esc(x.title) + '<small>' + esc(String(x.updated_at || '').slice(0, 16).replace('T', ' ')) + '</small></button>').join('') : '<p class="small muted">Belum ada percakapan.</p>'
+    $('[data-agent-conversation]', el).forEach((b) => { b.onclick = () => withBusy(null, async () => { state.agentConversationId = b.dataset.agentConversation; await loadAgentMessages(); await loadAgentConversations() }) })
+  } catch (e) { el.textContent = e.message }
+}
+async function loadAgentMessages() {
+  if (!state.agentConversationId) { agentRenderMessages([]); return }
+  const d = await api('GET', '/affiliate/agent/conversations/' + encodeURIComponent(state.agentConversationId) + '/messages')
+  agentRenderMessages(d.messages)
+}
+async function loadAgent() {
+  $('#agent-messages').innerHTML = '<p class="loading">Menyiapkan Agent…</p>'
+  try {
+    await loadAgentConversations()
+    await loadAgentMessages()
+  } catch (e) { $('#agent-messages').innerHTML = '<p class="msg bad">' + esc(e.message) + '</p>' }
+}
+function startAgentConversation() {
+  state.agentConversationId = null
+  agentRenderMessages([])
+  loadAgentConversations()
+  $('#agent-message').focus()
+}
+$('#agent-new').onclick = startAgentConversation
+$('#agent-messages').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-agent-prompt]')
+  if (b) { $('#agent-message').value = b.dataset.agentPrompt; $('#agent-message').focus() }
+})
+$('#agent-form').onsubmit = (e) => {
+  e.preventDefault()
+  const input = $('#agent-message'), btn = $('#agent-send'), message = input.value.trim()
+  if (!message) return
+  const useTavily = $('#agent-use-tavily').checked
+  const optimistic = []
+  const current = $('#agent-messages').querySelectorAll('.agent-message')
+  current.forEach((node) => optimistic.push({ role: node.classList.contains('user') ? 'user' : 'assistant', content: node.querySelector('.agent-message-body')?.innerText || '' }))
+  optimistic.push({ role: 'user', content: message })
+  agentRenderMessages(optimistic)
+  input.value = ''
+  $('#agent-messages').insertAdjacentHTML('beforeend', '<div class="agent-thinking" id="agent-thinking"><span class="thinking-dots">•••</span> OLTAVYN sedang berpikir…</div>')
+  $('#agent-messages').scrollTop = $('#agent-messages').scrollHeight
+  withBusy(btn, async () => {
+    try {
+      const d = await api('POST', '/affiliate/agent/chat', { workspace_id: state.ws, conversation_id: state.agentConversationId, message, use_tavily: useTavily })
+      state.agentConversationId = d.conversation_id
+      await loadAgentMessages()
+      await loadAgentConversations()
+      if (d.research?.note) show('Riset Tavily selesai. Hasil masih berupa petunjuk yang perlu ditinjau.')
+    } catch (err) {
+      $('#agent-thinking')?.remove()
+      $('#agent-messages').insertAdjacentHTML('beforeend', '<article class="agent-message assistant"><div class="agent-role">OLTAVYN Agent</div><div class="agent-message-body">' + esc(err.message) + '</div></article>')
+    } finally {
+      $('#agent-thinking')?.remove()
+      $('#agent-messages').scrollTop = $('#agent-messages').scrollHeight
+      $('#agent-use-tavily').checked = false
+    }
+  })
+}
 // ---------- Multi-Provider Hub ----------
 const STATE_ID = {
   unconfigured: ['Belum dikonfigurasi', 'warn'],
