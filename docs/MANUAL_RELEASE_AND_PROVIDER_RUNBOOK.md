@@ -10,7 +10,7 @@ This project intentionally uses **manual, operator-controlled releases**. It doe
 | Preview | `oltavyn-preview` | Remote integration/authentication smoke tests | No |
 | Production | `oltavyn-production` (legacy binding ID retained pending recovery decision) | Live service | No changes until explicit release approval |
 
-The preview D1 database was created in the Cloudflare account for isolated verification. Its ID is recorded in `wrangler.jsonc`. The previous production binding ID is intentionally preserved and is not silently replaced.
+The preview D1 database was created in the Cloudflare account for isolated verification. Its ID is recorded in `wrangler.jsonc`. The previous production binding ID is intentionally preserved and is not silently replaced. The account currently has a 10-database limit and now uses all 10 slots after preview creation; creation of a replacement production database was rejected with Cloudflare error 7406. Do not delete another project's database to make room without explicit owner approval. First investigate recovery of the missing legacy database or request approval to retire a confirmed-unused database.
 
 ## Manual verification
 
