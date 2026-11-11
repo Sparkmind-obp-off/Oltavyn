@@ -89,7 +89,7 @@ const state = { user: undefined, workspaces: [], wsId: localStorage.getItem('olt
 const ws = () => state.workspaces.find((w) => w.id === state.wsId)
 const NAV = [
   ['overview', 'Ikhtisar', '◎'], ['research', 'Riset', '1'], ['opportunities', 'Peluang', '2'],
-  ['content', 'Content Studio', '3'], ['experiments', 'Eksperimen', '4'], ['learning', 'Pembelajaran', '5'], ['settings', 'Pengaturan', '⚙'],
+  ['content', 'Content Studio', '3'], ['experiments', 'Eksperimen', '4'], ['learning', 'Pembelajaran', '5'], ['commercial', 'Paket & Pesanan', 'Rp'], ['settings', 'Pengaturan', '⚙'],
 ]
 function route() {
   const path = location.hash.replace(/^#\/?/, '').split('?')[0]
@@ -117,7 +117,7 @@ function render() {
   if (!state.user) return renderAuth()
   if (!state.workspaces.length) return renderShell(renderFirstWorkspace)
   const { page, id } = route()
-  const pages = { overview: pageOverview, research: pageResearch, opportunities: pageOpportunities, content: pageContent, experiments: pageExperiments, learning: pageLearning, settings: pageSettings }
+  const pages = { overview: pageOverview, research: pageResearch, opportunities: pageOpportunities, content: pageContent, experiments: pageExperiments, learning: pageLearning, commercial: pageCommercial, settings: pageSettings }
   renderShell(pages[page] || pageOverview, id)
 }
 
@@ -247,6 +247,43 @@ async function loadInto(main, headHtml, loader, view) {
   }
 }
 const head = (title, desc, actions = '') => html`<div class="page-head"><div><h1>${title}</h1><p>${desc}</p></div><div class="row">${actions}</div></div>`
+
+
+/* ---------- Customer journey: catalog → order → checkout → fulfillment ---------- */
+async function pageCommercial(main) {
+  main.innerHTML = html`${head('Paket & Pesanan', 'Pilih bantuan yang dibutuhkan, buat pesanan, lalu lanjutkan pembayaran dengan aman.')}
+    <div class="card"><div class="journey-steps"><span class="journey-active">1 · Pilih paket</span><span>2 · Konfirmasi pesanan</span><span>3 · Pembayaran</span><span>4 · Pengerjaan</span></div>
+    <p class="small muted">Harga dan ruang lingkup dikunci dari katalog server saat pesanan dibuat. Pembayaran hanya dianggap berhasil setelah callback Duitku diverifikasi server.</p></div>
+    <div data-catalog class="grid grid-3"><div class="card">${skeleton(3)}</div></div>
+    <div class="card" style="margin-top:18px"><div class="spread"><div><h2>Riwayat pesanan</h2><p class="small muted">Pesanan di seluruh workspace milik akun ini.</p></div><button class="btn btn-ghost btn-sm" id="orders-refresh">Muat ulang</button></div><div data-orders><p class="muted">Memuat pesanan…</p></div></div>`.s
+  const catalogEl = $('[data-catalog]', main), ordersEl = $('[data-orders]', main)
+  const money = n => new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n||0))
+  const statusLabel = {pending_payment:'Menunggu pembayaran',paid:'Sudah dibayar',processing:'Sedang dikerjakan',delivered:'Selesai',cancelled:'Dibatalkan',expired:'Kedaluwarsa',refunded:'Dikembalikan',payment_failed:'Pembayaran gagal'}
+  async function loadOrders() {
+    const d = await api('GET','/commercial/orders')
+    ordersEl.innerHTML = d.orders.length ? d.orders.map(o=>html`<article class="item order-item"><div class="spread"><div><strong>${o.merchant_order_id}</strong><div class="small muted">${fmtDate(o.created_at)}</div></div><span class="badge ${o.status==='paid'||o.status==='delivered'?'b-ok':o.status==='pending_payment'?'b-warn':'b-neutral'}">${statusLabel[o.status]||o.status}</span></div><div class="spread" style="margin-top:8px"><strong>${money(o.total_idr)}</strong><button class="btn btn-ghost btn-sm" data-order="${o.id}">Detail</button></div></article>`).join('').map(x=>x.s).join('') : '<div class="empty"><h3>Belum ada pesanan</h3><p>Pilih salah satu paket di atas untuk memulai.</p></div>'
+    $('[data-order]',ordersEl).forEach(b=>b.onclick=async()=>{
+      try { const d=await api('GET','/commercial/orders/'+b.dataset.order); const p=d.payment; dialog({title:'Detail pesanan',body:html`<p><strong>${d.order.merchant_order_id}</strong></p><p>Status: ${statusLabel[d.order.status]||d.order.status}</p><p>Total: <strong>${money(d.order.total_idr)}</strong></p><h3>Ruang lingkup</h3>${d.items.map(i=>html`<p><strong>${i.name_snapshot}</strong></p><ul>${JSON.parse(i.deliverables_snapshot_json).map(x=>html`<li>${x}</li>`)}</ul>`).map(x=>x.s).join('')}${p?.payment_url && d.order.status==='pending_payment'?html`<p><a class="btn btn-primary" href="${p.payment_url}" target="_blank" rel="noopener noreferrer">Lanjutkan pembayaran</a></p>`:''}`.s,submitLabel:'Tutup'}) }
+      catch(e){toast(e.message)}
+    })
+  }
+  try {
+    const d=await api('GET','/commercial/catalog')
+    catalogEl.innerHTML=d.catalog.map(item=>html`<article class="card package-card"><div class="package-kicker">OLTAVYN SERVICE</div><h2>${item.name}</h2><p class="muted">${item.description}</p><div class="package-price">${money(item.price_idr)} <small>${item.billing_type==='monthly'?'/ bulan':'/ sekali'}</small></div><h3>Termasuk</h3><ul>${item.deliverables.map(x=>html`<li>${x}</li>`)}</ul><details><summary>Batasan layanan</summary><ul>${item.exclusions.map(x=>html`<li>${x}</li>`)}</ul></details><button class="btn btn-primary" data-buy="${item.sku}" style="width:100%;margin-top:14px">Pilih paket</button></article>`).map(x=>x.s).join('')
+    $('[data-buy]',catalogEl).forEach(b=>b.onclick=async()=>{
+      const item=d.catalog.find(x=>x.sku===b.dataset.buy)
+      dialog({title:'Konfirmasi pesanan',body:html`<p>Anda akan memesan <strong>${item.name}</strong>.</p><p>Total: <strong>${money(item.price_idr)}</strong></p><p>Workspace: <strong>${ws()?.name||'—'}</strong></p><p class="small muted">Pembayaran belum dilakukan. Pesanan akan dibuat menggunakan harga dan deliverables dari katalog OLTAVYN.</p><label class="l" for="order-note">Catatan tambahan (opsional)</label><textarea id="order-note" maxlength="1000" placeholder="Konteks, target audiens, atau kebutuhan khusus"></textarea>`.s,submitLabel:'Buat pesanan',onSubmit:async()=>{
+        const key=crypto.randomUUID()
+        const created=await api('POST','/commercial/orders',{workspace_id:state.wsId,sku:item.sku,customer_note:$('#order-note')?.value||''},{'Idempotency-Key':key})
+        const checkout=await api('POST','/commercial/orders/'+created.order.id+'/checkout',{})
+        if(checkout.payment_url){window.location.assign(checkout.payment_url);return}
+        toast('Pesanan dibuat.');await loadOrders()
+      }})
+    })
+    await loadOrders()
+  } catch(e) {catalogEl.innerHTML=errorBox(e).s;ordersEl.textContent='Riwayat pesanan belum tersedia.'}
+  $('#orders-refresh').onclick=()=>loadOrders().catch(e=>toast(e.message))
+}
 
 // ---------- Overview ----------
 async function pageOverview(main) {
