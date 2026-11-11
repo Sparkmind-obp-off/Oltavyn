@@ -168,7 +168,6 @@ async function loadChannels() {
 const STATE_ID = {
   unconfigured: ['Belum dikonfigurasi', 'warn'],
   configured_unverified: ['Secret terpasang · belum divalidasi', ''],
-  endpoint_unverified: ['Endpoint belum diverifikasi', 'warn'],
   disabled: ['Dinonaktifkan', 'bad'],
 }
 const PROVIDER_NAMES = { groq: 'Groq', tavily: 'Tavily', apify: 'Apify', scrapely: 'Scrape.ly' }
@@ -190,7 +189,6 @@ async function loadProviders() {
       return '<div class="item"><div class="spread"><strong>' + esc(PROVIDER_NAMES[p.id] || p.id) + '</strong><span class="pill ' + meta[1] + '">' + esc(meta[0]) + '</span></div>' +
         '<div class="small">' + esc(p.purpose) + '</div><div class="small muted">Catatan biaya: ' + esc(p.billing_note) + '</div>' +
         (p.allowed_actors ? '<div class="small muted">Allowlist: ' + (p.allowed_actors.length ? esc(p.allowed_actors.join(', ')) : 'kosong — Actor tidak dapat dijalankan') + '</div>' : '') +
-        (p.id === 'scrapely' ? '<div class="small muted">Endpoint: ' + (p.endpoint_ready ? 'dikonfigurasi, belum tervalidasi' : 'belum dikonfigurasi') + '</div>' : '') +
         '</div>'
     }).join('') + '</div>'
     const byId = Object.fromEntries(d.providers.map((p) => [p.id, p]))
@@ -199,8 +197,7 @@ async function loadProviders() {
     $('#tavily-form button').disabled = !can('tavily')
     $('#apify-form button').disabled = !can('apify') || !(byId.apify.allowed_actors || []).length
     $('#scrapely-form button').disabled = !can('scrapely') || !(byId.scrapely.allowed_actors || []).length
-    if (byId.scrapely.state === 'endpoint_unverified') $('#scrapely-result').textContent = 'Scrape.ly menggunakan API resmi v2. Siapkan SCRAPELY_TOKEN dan Actor allowlist.'
-    else if (!can('scrapely')) $('#scrapely-result').textContent = 'Scrape.ly belum siap. Periksa secret, kill switch, endpoint, dan allowlist.'
+    if (!can('scrapely')) $('#scrapely-result').textContent = 'Scrape.ly belum siap. Periksa secret, kill switch, dan Actor allowlist.'
   } catch (e) { el.innerHTML = '<p class="msg bad">' + esc(e.message) + '</p>' }
   await loadProviderUsage()
 }
