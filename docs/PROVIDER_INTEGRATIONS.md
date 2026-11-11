@@ -16,7 +16,7 @@ Status: Multi-Provider Hub UI and backend adapters are implemented on `feat/mult
 | Groq | LLM draft generation | `POST /api/affiliate/providers/groq/generate` | `GROQ_API_KEY` |
 | Tavily | Search/research source discovery | `POST /api/affiliate/providers/tavily/search` | `TAVILY_API_KEY` |
 | Apify | Explicitly approved Actor run request | `POST /api/affiliate/providers/apify/run` | `APIFY_API_TOKEN` |
-| Scrape.ly | Explicitly approved task/Actor run request; fail-closed until official endpoint is reviewed | `POST /api/affiliate/providers/scrapely/run` | `SCRAPELY_TOKEN` plus `SCRAPELY_BASE_URL` and `SCRAPELY_RUN_PATH` |
+| Scrape.ly | Explicitly approved Actor run request | `POST /api/affiliate/providers/scrapely/run` | `SCRAPELY_TOKEN` |
 
 All endpoints require an authenticated OLTAVYN session. Keys are read only from Worker environment bindings; they are never returned by the provider status endpoint, written to D1, or sent to browser JavaScript.
 
@@ -32,7 +32,7 @@ Uses the Search API with basic depth and a small result count. Returned source U
 
 Both adapters accept a caller-supplied Actor ID and JSON input. Each run requires `confirm_run: true`, is rate-limited, and returns the run/dataset identifiers only. The adapter does not select an Actor, retrieve datasets, import records, or publish content automatically. The Multi-Provider Hub UI requires a second explicit browser confirmation and disables execution unless the provider secret is present and the Actor allowlist is non-empty.
 
-Apify uses its documented `/acts/{actorId}/runs` API path. Scrape.ly is intentionally fail-closed: no default API base URL or run path is assumed. It requires HTTPS `SCRAPELY_BASE_URL` and a reviewed `SCRAPELY_RUN_PATH` beginning with `/`, with `{actorId}` placeholder where appropriate. Do not configure these until the official vendor API documentation, authentication, request schema, terms and pricing are verified.
+Apify uses its documented `/acts/{actorId}/runs` API path. Scrape.ly uses the official `https://api.scrape.ly/v2/actors/{actorId}/runs` endpoint and Bearer-token authentication. Both receive the Actor input object at the top level. The Scrape.ly API base and run path are grounded in the official [API guide](https://scrape.ly/docs/api) and [API overview](https://scrape.ly/docs/api-overview).
 
 **Cost safety:** an Actor run may consume a provider's prepaid balance or paid credits even when the account has a free allowance. Do not call these endpoints unless the operator has inspected the Actor, its input schema, terms, and expected cost, and explicitly confirms that individual run. The confirmation flag is not a spending cap.
 
@@ -67,7 +67,8 @@ Pricing and terms change. Re-check provider dashboards before enabling a run. No
 - `/affiliate` → Provider tab now exposes status cards and separate Groq, Tavily, Apify and Scrape.ly task forms.
 - `/api/affiliate/providers` reports configuration-only state and allowlisted Actor IDs; it never reveals secrets.
 - `/api/affiliate/providers/usage` aggregates audit-log call counts and last-call timestamps over 30 days. This is not token, credit, balance, or monetary cost metering.
-- Actor forms require a JSON object, a visible acknowledgement checkbox, a browser confirmation dialog, server-side `confirm_run: true`, and an allowlisted Actor ID.
+- Actor forms require a JSON object, a visible acknowledgement checkbox, a browser confirmation dialog, server-side `confirm_run: true`, an allowlisted Actor ID, and a per-run spend cap (USD 0.01–1.00), max items (1–100), and timeout (1–120 seconds).
+- Apify and Scrape.ly document `maxTotalChargeUsd`, `maxItems`, and `timeout` run options; the hub sends these as query parameters for each run. See [Apify Run Actor](https://docs.apify.com/api/v2/actors-runs-post) and [Scrape.ly Run Actors](https://scrape.ly/docs/run-actors).
 - The UI never accepts provider API keys. Configure them only in Cloudflare Pages → Settings → Variables and Secrets.
 
 ## Current limitations
