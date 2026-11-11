@@ -53,7 +53,8 @@ api.get('/workspaces', async (c) => {
 api.post('/workspaces', async (c) => {
   const d = validate<any>(await body(c), wsSchema as any)
   const count = await c.env.DB.prepare('SELECT COUNT(*) n FROM workspaces WHERE owner_user_id = ?').bind(c.get('user').id).first<{ n: number }>()
-  if ((count?.n ?? 0) >= 20) throw new ApiError(400, 'limit_reached', 'Batas 20 workspace per akun tercapai.')
+  const workspaceLimit = c.get('user').plan_code === 'free_starter' ? 1 : 20
+  if ((count?.n ?? 0) >= workspaceLimit) throw new ApiError(403, 'plan_limit_reached', workspaceLimit === 1 ? 'Paket Free Starter mencakup 1 workspace. Upgrade paket untuk menambah workspace.' : 'Batas 20 workspace per akun tercapai.')
   const id = newId('ws'), t = nowIso()
   await c.env.DB.prepare('INSERT INTO workspaces (id, owner_user_id, name, niche, audience, goal, allowed_sources, locale, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)')
     .bind(id, c.get('user').id, d.name, d.niche ?? null, d.audience ?? null, d.goal ?? null, d.allowed_sources ?? null, d.locale ?? 'id-ID', t, t).run()
