@@ -32,7 +32,7 @@ Future self-service subscriptions are a separate validation phase. Do not publis
 
 ## 3. Commercial data model (additive migration only)
 
-Implemented in `migrations/0006_commercial_platform.sql` as additive tables: `commercial_catalog`, `commercial_orders`, `commercial_order_items`, `commercial_payments`, `commercial_payment_events`, `commercial_entitlements`, and `commercial_service_jobs`. Existing `users` and owner-scoped `workspaces` are reused. Three initial service SKUs are seeded as editable catalog rows. Admin CRUD, usage ledger, invoice documents and customer-facing UI are still pending.
+Implemented in `migrations/0006_commercial_platform.sql` as additive tables: `commercial_catalog`, `commercial_orders`, `commercial_order_items`, `commercial_payments`, `commercial_payment_events`, `commercial_entitlements`, and `commercial_service_jobs`. Existing `users` and owner-scoped `workspaces` are reused. Three initial service SKUs are seeded as editable catalog rows. Public package catalog, authenticated customer catalog, order creation/list/detail, first-workspace onboarding and order checkout UI are committed. Admin CRUD, fulfillment/revision UI, usage ledger and invoice documents remain pending.
 
 Money is stored as integer IDR. Keep the immutable purchased scope/price snapshot on order items so later catalog edits cannot rewrite an existing order.
 
@@ -52,7 +52,7 @@ Callback:
 - HTTP POST, x-www-form-urlencoded.
 - Verify HMAC-SHA256(merchantCode + amount + merchantOrderId, API key) using constant-time comparison.
 - Match merchantCode, merchantOrderId, amount, reference and currency/order record. Reject unknown order, wrong amount, wrong merchant, invalid signature and inconsistent reference.
-- Treat resultCode 00 as paid only after all checks. Record all valid/invalid callback attempts safely and idempotently.
+- Treat resultCode 00 as paid only after all checks. Record verified callback events safely and idempotently; invalid callbacks are rejected without storing raw payment credentials.
 - Return HTTP 200 only after durable event processing. Callback retries must not grant duplicate entitlements.
 - JS callback and returnUrl are UI signals only. Never grant entitlement or mark an order paid from browser parameters.
 - Reconcile ambiguous/pending states against Duitku's server-side transaction status/query facility before granting access.
@@ -70,7 +70,8 @@ Never put the API key in frontend JavaScript, HTML, D1, logs, GitHub or chat. Ne
 ## 5. Required endpoints and lifecycle
 
 Customer:
-- GET /commercial/catalog (returns checkout readiness; catalog remains viewable while checkout is disabled)
+- GET /api/public/catalog (read-only catalog before sign-up)
+- GET /api/commercial/catalog (authenticated catalog plus checkout readiness)
 - GET /commercial/catalog/:sku
 - POST /commercial/orders (authenticated; server computes all prices and snapshots scope)
 - GET /commercial/orders
