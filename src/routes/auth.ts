@@ -1,9 +1,8 @@
 import { Hono, type MiddlewareHandler } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
-import { ApiError, AppEnv, audit, newId, nowIso, sha256Hex } from '../lib/core'
+import { ApiError, AppEnv, PBKDF2_ITERATIONS, audit, hashPassword, newId, nowIso, randomToken, sha256Hex } from '../lib/core'
 
 const COOKIE = 'olt_session'
-const SESSION_DAYS = 14
 
 const clientKey = (c: any) => c.req.header('cf-connecting-ip') || 'local'
 
