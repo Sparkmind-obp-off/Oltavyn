@@ -510,7 +510,7 @@ affiliateApi.post('/agent/chat', async (c) => {
     ].join('\n\n')
     const messages = [
       { role: 'system' as const, content: system },
-      ...recent.map((m: any) => ({ role: m.role as 'user' | 'assistant', content: String(m.content).slice(0, 6000) })),
+      ...recent.filter((m: any) => !(m.role === 'user' && String(m.content) === message)).map((m: any) => ({ role: m.role as 'user' | 'assistant', content: String(m.content).slice(0, 6000) })),
       { role: 'user' as const, content: message },
     ]
     const result = await runGroqToolLoop({
