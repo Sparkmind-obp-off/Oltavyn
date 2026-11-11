@@ -220,7 +220,7 @@ $('#agent-form').onsubmit = (e) => {
   $('#agent-messages').scrollTop = $('#agent-messages').scrollHeight
   withBusy(btn, async () => {
     try {
-      const d = await api('POST', '/affiliate/agent/chat', { workspace_id: state.ws, conversation_id: state.agentConversationId, message, use_tavily: useTavily })
+      const d = await api('POST', '/affiliate/agent/chat', { workspace_id: state.ws, conversation_id: state.agentConversationId, message, use_tavily: useTavily, model: $('#agent-model').value.trim() })
       state.agentConversationId = d.conversation_id
       await loadAgentMessages()
       await loadAgentConversations()
