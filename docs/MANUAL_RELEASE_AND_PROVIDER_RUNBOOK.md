@@ -1,20 +1,21 @@
-# OLTAVYN — Manual Release & Provider Runbook
+# OLTAVYN — Direct Production & Provider Runbook
 
-This project intentionally uses **manual, operator-controlled releases**. It does not use GitHub Actions, CI/CD workflows, or workflow YAML.
+This project uses **manual, operator-controlled releases**. No GitHub Actions, CI/CD workflows, or workflow YAML.
 
-## Environment map
+## Production environment
 
-| Environment | D1 database | Purpose | Automatic production writes |
-|---|---|---|---|
-| Local | Wrangler local D1 state | Development and repeatable tests | No |
-| Preview | `oltavyn-preview` | Remote integration/authentication smoke tests | No |
-| Production | `oltavyn-production` (legacy binding ID retained pending recovery decision) | Live service | No changes until explicit release approval |
+- Pages project: `oltavyn`
+- Production hostname: `oltavyn.pages.dev` and configured custom domain(s)
+- D1 binding: `DB`
+- Production D1: `oltavyn-production`
+- Production D1 UUID: `2456b40f-2d4c-45f6-a10f-82d17606d856`
+- Region: APAC
+- Previous production database UUID `94c9a84b-7fa8-49a4-b9f2-8006450a767b` was not found by Cloudflare (7404). The new database is empty; the old data has not been restored.
+- The temporary `oltavyn-preview` database was deleted after the owner explicitly redirected the work to direct production. No other project's D1 database was deleted.
 
-The preview D1 database was created in the Cloudflare account for isolated verification. Its ID is recorded in `wrangler.jsonc`. The previous production binding ID is intentionally preserved and is not silently replaced. The account currently has a 10-database limit and now uses all 10 slots after preview creation; creation of a replacement production database was rejected with Cloudflare error 7406. Do not delete another project's database to make room without explicit owner approval. First investigate recovery of the missing legacy database or request approval to retire a confirmed-unused database.
+## Manual verification commands
 
-## Manual verification
-
-Run from the repository root:
+Run from a clean checkout:
 
 ```sh
 npm ci
@@ -27,51 +28,53 @@ npm run test:affiliate
 npm audit --omit=dev
 ```
 
-Or run the complete deterministic local gate:
+Or run the deterministic local gate:
 
 ```sh
 npm run test:all
 ```
 
-Tests must use mocks/fixtures. Do not add live provider calls to the local test suite.
+Only report results supported by actual command output. Local tests must use mocks/fixtures and must not make live provider calls.
 
-## Preview D1 and preview deployment
+## Production migrations and authentication
 
-1. Confirm the current branch is `feat/faceless-affiliate-factory-phase1`.
-2. Inspect `wrangler.jsonc` and confirm the top-level `DB` binding points to `oltavyn-preview`.
-3. Apply migrations only to preview:
+The new production D1 starts empty. Apply the ordered migrations 0001–0003 to the production database only after checking the database UUID and confirming the exact commit/configuration:
+
+```sh
+npm run db:migrate:prod
+```
+
+Then verify:
+- `/api/health` and a DB-backed health/readiness route if implemented
+- registration and login
+- session cookie persistence, expiry, logout and invalid session
+- CSRF/origin protection and rate limits
+- workspace create/list/read and cross-workspace denial
+- affiliate products/channels/evidence/scorecards/content package flows
+- export and workspace deletion including affiliate records
+
+Use a dedicated production smoke-test identity only with explicit owner approval. Never reuse real credentials. If any production smoke test writes data, record the exact test identity and clean it using the documented cleanup SQL scoped to this database only. Do not claim the test passed before actual output is inspected.
+
+## Production deployment
+
+1. Ensure the reviewed release commit is on `main`.
+2. Run local verification commands.
+3. Verify Wrangler production binding points to the exact D1 UUID above.
+4. Apply production migrations and inspect migration history/schema.
+5. Deploy the reviewed `main` build:
 
    ```sh
-   npm run db:migrate:preview
+   npm run deploy:prod
    ```
 
-4. Build and deploy a preview version:
+6. Run non-destructive health and authentication checks, then the approved smoke test.
+7. Record deployment ID, commit SHA, D1 UUID, migration versions, test results and provider state.
 
-   ```sh
-   npm run deploy:preview
-   ```
-
-5. Test the preview hostname:
-   - `/api/health`
-   - registration/login and session persistence
-   - workspace create/list/read and workspace isolation
-   - `/affiliate` product/channel/evidence/scorecard/content flows
-   - provider status (must show unconfigured/disabled until credentials are intentionally set)
-   - logout and invalid-session behavior
-
-6. Do not run production migrations, update production bindings, change custom domains, or merge the PR as part of preview testing.
-
-## Authentication and first-run
-
-- The application authentication is backed by the D1 schema. A newly created D1 database must receive the full ordered migration chain before login, registration, sessions, and workspace operations can work.
-- Never infer that a healthy `/api/health` response proves the database or authentication is healthy.
-- Use a dedicated test identity only in preview. Do not reuse a real password or production account.
-- Verify session cookie flags, CSRF/origin guard, rate limits, logout, and cross-workspace access denial.
-- Remove preview test records after verification using the documented cleanup script, scoped to the preview database only.
+Do not deploy unreviewed feature-branch code labelled as production. Do not merge the PR until code review and local verification are complete.
 
 ## Provider configuration and activation
 
-Provider integrations are optional and must remain disabled until the owner intentionally configures credentials and validates each connection.
+Provider integrations are optional and remain disabled until credentials are intentionally configured and validated.
 
 | Provider | Secret name | Purpose | Current gate |
 |---|---|---|---|
@@ -84,21 +87,15 @@ Rules:
 - Never paste credentials into chat, GitHub files, D1, browser code, logs, or screenshots.
 - Configure secrets only through Cloudflare Pages secrets or an untracked local `.dev.vars`.
 - A secret's presence means `configured_unverified`, not `verified`.
-- Run a small read-only credential validation first where the provider supports it.
+- Run a small read-only credential validation first where supported.
 - Show exact provider/Actor/model, data sent, quota/cost uncertainty, and limits before any billable request.
 - Do not run Actors, batch scraping, or paid requests without explicit per-run approval.
-- No provider is required for manual product intake, evidence, scorecards, template content packs, approvals, or manual publishing.
+- A boolean confirmation flag is not a spend cap; unattended batch actions stay disabled until enforceable quotas exist.
+- Provider outages must not block manual intake, evidence, scorecards, template content generation, approvals, or manual publishing.
 
-## Production release gate
+## Recovery and rollback
 
-Production is blocked until all are true:
-
-1. The missing legacy D1 database is investigated for deletion/undelete or recoverable backup.
-2. The owner decides whether old production data can be discarded.
-3. Preview migrations and auth/workspace smoke tests pass against the remote preview D1.
-4. All local verification commands pass from actual output.
-5. Provider connection status and cost controls are documented; no provider is falsely marked verified.
-6. Exact commit, diff, production D1 target, migration plan, backup/restore plan, and rollback behavior are reviewed.
-7. The owner gives separate explicit approval for production database creation/binding, remote migrations, provider activation/spend, merge, and production deployment.
-
-A Pages deployment rollback does not restore D1 data. Keep database recovery and code rollback as separate procedures.
+- A Pages deployment rollback does not restore D1 data.
+- Keep database recovery separate from code rollback.
+- The old production D1 is currently unavailable. The new production D1 is empty and cannot recover the old users/workspaces.
+- Keep backups and document restore procedures before material production data accumulates.
