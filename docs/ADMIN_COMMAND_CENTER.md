@@ -57,3 +57,7 @@ Do not apply remote migrations or deploy production until the owner explicitly a
 5. Test dashboard, queue, job status changes, deliverable visibility, revision limits, and audit trail using test orders.
 6. Verify customer workspace isolation and confirm a non-admin receives 403 from `/api/admin/dashboard`.
 7. Only then consider enabling Duitku sandbox checkout.
+
+## Edge access layer
+
+The Command Center also requires Cloudflare Access at the edge and validates the signed Access JWT in the Pages Function. Configure the team domain, application audience tag(s), and path policies using [CLOUDFLARE_ACCESS_ADMIN_SETUP.md](./CLOUDFLARE_ACCESS_ADMIN_SETUP.md). The existing OLTAVYN session and `OLTAVYN_ADMIN_EMAILS` allowlist remain mandatory after Access validation.
