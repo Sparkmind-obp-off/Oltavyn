@@ -3,65 +3,29 @@ import { secureHeaders } from 'hono/secure-headers'
 import { ApiError, AppEnv } from './lib/core'
 import { auth, csrfGuard, requireAuth } from './routes/auth'
 import { api } from './routes/domain'
-
+import { affiliateApi } from './routes/affiliate'
 const app = new Hono<AppEnv>()
-
-app.use('*', secureHeaders({
-  contentSecurityPolicy: {
-    defaultSrc: ["'self'"],
-    scriptSrc: ["'self'"],
-    styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], // inline style attrs only; scripts stay strict
-    fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-    imgSrc: ["'self'", 'data:'],
-    connectSrc: ["'self'"],
-    frameAncestors: ["'none'"],
-    formAction: ["'self'"],
-    baseUri: ["'self'"],
-  },
-  referrerPolicy: 'strict-origin-when-cross-origin',
-}))
-
-app.use('/api/*', async (c, next) => {
-  await next()
-  c.header('Cache-Control', 'no-store')
-})
-app.use('/api/*', csrfGuard)
-
-app.get('/api/health', (c) => c.json({ ok: true, service: 'oltavyn', version: '0.1.0' }))
-app.route('/api/auth', auth)
-app.use('/api/*', requireAuth)
-app.route('/api', api)
-
-app.notFound((c) => c.req.path.startsWith('/api/') ? c.json({ error: { code: 'not_found', message: 'Endpoint tidak ditemukan.' } }, 404) : c.text('Not found', 404))
-
-app.onError((err, c) => {
-  if (err instanceof ApiError) {
-    return c.json({ error: { code: err.code, message: err.message, details: err.details ?? null } }, err.status as any)
-  }
-  const reqId = crypto.randomUUID()
-  console.error(JSON.stringify({ reqId, path: c.req.path, err: String((err as Error)?.message || err).slice(0, 300) }))
-  return c.json({ error: { code: 'internal_error', message: 'Terjadi kesalahan di server.', request_id: reqId } }, 500)
-})
-
-const shell = `<!doctype html>
-<html lang="id">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OLTAVYN — Agentic Content OS</title>
-<meta name="description" content="Workbench berbasis bukti: Riset → Peluang → Konten → Publikasi → Pembelajaran.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231f2a44'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23d9b26f' stroke-width='3'/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="/static/app.css">
-</head>
-<body>
-<a class="skip-link" href="#main">Lewati ke konten</a>
-<div id="app" aria-live="polite"><p class="boot">Memuat OLTAVYN…</p></div>
-<script type="module" src="/static/app.js"></script>
-</body>
-</html>`
-
-app.get('*', (c) => c.html(shell))
-
+app.use('*', secureHeaders({contentSecurityPolicy:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'",'https://fonts.googleapis.com'],fontSrc:["'self'",'https://fonts.gstatic.com'],imgSrc:["'self'",'data:','https:'],connectSrc:["'self'"],frameAncestors:["'none'"],formAction:["'self'"],baseUri:["'self'"]},referrerPolicy:'strict-origin-when-cross-origin'}))
+app.use('/api/*',async(c,next)=>{await next();c.header('Cache-Control','no-store')})
+app.use('/api/*',csrfGuard)
+app.get('/api/health',(c)=>c.json({ok:true,service:'oltavyn',version:'0.2.0'}))
+app.route('/api/auth',auth)
+app.use('/api/*',requireAuth)
+app.route('/api',api)
+app.route('/api/affiliate',affiliateApi)
+const shell=`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OLTAVYN — Agentic Content OS</title><meta name="description" content="Workbench berbasis bukti: Riset → Peluang → Konten → Publikasi → Pembelajaran."><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"><link rel="stylesheet" href="/static/app.css"></head><body><a class="skip-link" href="#main">Lewati ke konten</a><div id="app" aria-live="polite"><p class="boot">Memuat OLTAVYN…</p></div><script type="module" src="/static/app.js"></script></body></html>`
+const affiliateShell=`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Affiliate OS — OLTAVYN</title><style>
+:root{font-family:Inter,system-ui,sans-serif;color:#1f2937;background:#f5f6f8}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1180px;margin:auto;padding:28px 20px}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.muted{color:#687386}.card{background:#fff;border:1px solid #e4e7ec;border-radius:14px;padding:18px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.stat{font-size:28px;font-weight:700}.field{display:flex;flex-direction:column;gap:6px;margin:10px 0}label{font-size:13px;font-weight:600}input,select,textarea{width:100%;border:1px solid #ccd2dc;border-radius:8px;padding:10px;font:inherit;background:#fff}textarea{min-height:90px}.btn{border:0;border-radius:8px;padding:10px 14px;background:#24324a;color:#fff;font-weight:600;cursor:pointer}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:720px){.cols{grid-template-columns:1fr}}table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:9px;border-bottom:1px solid #edf0f3;vertical-align:top}.pill{display:inline-block;border-radius:30px;padding:4px 8px;background:#eef2f7;font-size:12px}.msg{padding:10px;border-radius:8px;background:#edf5ff;margin:10px 0}.hide{display:none}a{color:#315d9a}pre{white-space:pre-wrap;overflow-wrap:anywhere}
+</style></head><body><main class="wrap"><header class="top"><div><div class="muted">OLTAVYN / PRODUCT 01</div><h1 style="margin:5px 0">Affiliate OS</h1><div class="muted">Product Intelligence · Channel Registry · Provider Workbench</div></div><div class="row"><a href="/">← Core Engine</a><span id="who" class="pill">Memeriksa sesi…</span></div></header><div id="message" class="msg hide"></div><section id="login" class="card hide"><h2>Masuk ke OLTAVYN</h2><p>Sesi belum aktif. Masuk melalui halaman utama OLTAVYN, lalu buka kembali halaman ini.</p><a href="/">Buka halaman login</a></section><section id="app" class="hide">
+<div class="grid"><div class="card">Produk tersimpan<div id="stat-products" class="stat">—</div></div><div class="card">Shortlist<div id="stat-shortlist" class="stat">—</div></div><div class="card">Kanal<div id="stat-channels" class="stat">—</div></div><div class="card">Kanal aktif<div id="stat-active" class="stat">—</div></div></div>
+<div class="card"><label>Workspace</label><select id="workspace"></select></div>
+<div class="cols"><section class="card"><h2>Tambah produk</h2><form id="product-form"><div class="field"><label>Nama produk *</label><input name="title" required maxlength="200"></div><div class="field"><label>URL produk *</label><input name="canonical_url" type="url" required placeholder="https://shopee.co.id/..."></div><div class="grid"><div class="field"><label>Kategori</label><input name="category"></div><div class="field"><label>Harga IDR</label><input name="price_amount" type="number" min="0"></div><div class="field"><label>Komisi %</label><input name="commission_rate_percent" type="number" min="0" max="100" step=".01"></div><div class="field"><label>Rating produk</label><input name="product_rating" type="number" min="0" max="5" step=".1"></div><div class="field"><label>Terjual (angka terlihat)</label><input name="sold_count" type="number" min="0"></div></div><div class="field"><label>Nama toko</label><input name="seller_name"></div><div class="field"><label>Catatan / angle</label><textarea name="notes"></textarea></div><button class="btn">Simpan produk</button></form></section>
+<section class="card"><h2>Tambah kanal</h2><form id="channel-form"><div class="field"><label>Platform</label><select name="platform"><option value="shopee_video">Shopee Video</option><option value="tiktok">TikTok</option><option value="instagram">Instagram</option><option value="youtube">YouTube</option><option value="facebook">Facebook</option></select></div><div class="field"><label>Nama kanal</label><input name="channel_name" required></div><div class="field"><label>Handle</label><input name="handle"></div><div class="field"><label>URL</label><input name="external_url" type="url"></div><button class="btn">Simpan kanal</button></form></section></div>
+<section class="card"><h2>Product Intelligence</h2><div id="products" class="muted">Belum ada produk.</div></section><section class="card"><h2>Channel Registry</h2><div id="channels" class="muted">Belum ada kanal.</div></section>
+<div class="cols"><section class="card"><h2>LLM Studio · Groq</h2><form id="groq-form"><div class="field"><label>Prompt</label><textarea name="prompt" required placeholder="Buat 3 hook video faceless. Jangan mengarang klaim produk."></textarea></div><div class="field"><label>Model</label><input name="model" value="llama-3.3-70b-versatile"></div><button class="btn">Generate draft</button></form><pre id="groq-result"></pre></section><section class="card"><h2>Research · Tavily</h2><form id="tavily-form"><div class="field"><label>Query</label><input name="query" required placeholder="masalah penyimpanan dapur rumah kecil Indonesia"></div><button class="btn">Cari sumber</button></form><div id="tavily-result"></div></section></div>
+<section class="card"><h2>Provider connections</h2><p class="muted">Status konfigurasi saja. Apify/Scrape.ly hanya dijalankan melalui API dengan persetujuan eksplisit setiap run.</p><div id="providers"></div></section>
+</section></main><script src="/static/affiliate.js" defer></script></body></html>`
+app.get('/affiliate',(c)=>c.html(affiliateShell))
+app.get('*',(c)=>c.html(shell))
+app.onError((err,c)=>{if(err instanceof ApiError)return c.json({error:{code:err.code,message:err.message,details:err.details??null}},err.status as any);const reqId=crypto.randomUUID();console.error(JSON.stringify({reqId,path:c.req.path,err:String((err as Error)?.message||err).slice(0,300)}));return c.json({error:{code:'internal_error',message:'Terjadi kesalahan di server.',request_id:reqId}},500)})
 export default app
