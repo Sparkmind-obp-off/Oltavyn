@@ -109,6 +109,16 @@ ok(r.j.tools.some((t) => t.id === 'provider.actor.run' && !t.enabled) && r.j.too
 r = await B('GET', AF + '/agent/tools?workspace_id=' + encodeURIComponent(ws)); ok(r.s === 404, 'other user cannot inspect tools for foreign workspace')
 r = await A('GET', AF + '/agent/tools'); ok(r.s === 400, 'tool registry requires explicit workspace scope')
 
+const runKey = 'smoke-' + rnd
+r = await A('POST', AF + '/agent/runs', { workspace_id: ws, intent: 'Read workspace summary', idempotency_key: runKey, steps: [{ tool_id: 'workspace.get_summary', input: {} }, { tool_id: 'products.list', input: { query: 'rak' } }] })
+ok(r.s === 201 && r.j.state === 'completed' && r.j.outputs.length === 2, 'bounded R0 plan executes and records outputs', JSON.stringify(r.j))
+const runId = r.j.run_id
+r = await A('GET', AF + '/agent/runs?workspace_id=' + encodeURIComponent(ws)); ok(r.s === 200 && r.j.runs.some((x) => x.id === runId && x.state === 'completed'), 'run ledger lists completed run')
+r = await A('GET', AF + '/agent/runs/' + runId + '/steps'); ok(r.s === 200 && r.j.steps.length === 2 && r.j.steps.every((x) => x.status === 'completed'), 'step ledger records each tool execution')
+r = await A('POST', AF + '/agent/runs', { workspace_id: ws, intent: 'Attempt publish', idempotency_key: 'blocked-' + rnd, steps: [{ tool_id: 'publication.publish', input: {} }] }); ok(r.s === 403, 'disabled publish tool cannot be executed')
+r = await A('POST', AF + '/agent/runs', { workspace_id: ws, intent: 'Replay', idempotency_key: runKey, steps: [{ tool_id: 'workspace.get_summary', input: {} }] }); ok(r.s === 200 && r.j.idempotent_replay === true && r.j.run_id === runId, 'idempotency key prevents duplicate run')
+r = await B('GET', AF + '/agent/runs/' + runId + '/steps'); ok(r.s === 404, 'other user cannot inspect run steps')
+
 console.log('Agent Live Chat workspace boundaries')
 r = await A('GET', AF + '/agent/conversations?workspace_id=' + encodeURIComponent(ws)); ok(r.s === 200 && Array.isArray(r.j.conversations), 'owner can list own workspace agent conversations')
 r = await B('GET', AF + '/agent/conversations?workspace_id=' + encodeURIComponent(ws)); ok(r.s === 404, 'other user cannot list agent conversations in foreign workspace')
