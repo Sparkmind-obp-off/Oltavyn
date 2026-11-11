@@ -1,0 +1,54 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { verifyAccessToken } from '../src/lib/cloudflareAccess'
+
+const team = 'oltavyn-test.cloudflareaccess.com'
+const audience = 'oltavyn-test-audience'
+const b64url = (value: Uint8Array | ArrayBuffer | string) => Buffer.from(typeof value === 'string' ? value : value instanceof ArrayBuffer ? new Uint8Array(value) : value).toString('base64url')
+
+let privateKey: CryptoKey
+let publicJwk: JsonWebKey & { kid: string; alg: string; use: string }
+let originalFetch: typeof fetch
+
+test('Cloudflare Access JWT verification', async t => {
+  const pair = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify'])
+  privateKey = pair.privateKey
+  publicJwk = { ...(await crypto.subtle.exportKey('jwk', pair.publicKey) as JsonWebKey), kid: 'test-kid', alg: 'RS256', use: 'sig' }
+  originalFetch = globalThis.fetch
+  globalThis.fetch = (async () => new Response(JSON.stringify({ keys: [publicJwk] }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as typeof fetch
+
+  const makeToken = async (overrides: Record<string, unknown> = {}) => {
+    const now = Math.floor(Date.now() / 1000)
+    const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: 'test-kid' }))
+    const payload = b64url(JSON.stringify({ iss: 'https://' + team, aud: [audience], sub: 'test-user', exp: now + 300, nbf: now - 5, ...overrides }))
+    const signingInput = header + '.' + payload
+    const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', privateKey, new TextEncoder().encode(signingInput))
+    return signingInput + '.' + b64url(signature)
+  }
+
+  await t.test('accepts a valid signed token with the expected issuer and audience', async () => {
+    await verifyAccessToken(await makeToken(), team, [audience])
+  })
+
+  await t.test('rejects a token with the wrong audience', async () => {
+    await assert.rejects(() => verifyAccessToken(await makeToken({ aud: ['wrong-audience'] }), team, [audience]), (error: any) => error?.code === 'access_invalid')
+  })
+
+  await t.test('rejects an expired token', async () => {
+    await assert.rejects(() => verifyAccessToken(await makeToken({ exp: Math.floor(Date.now() / 1000) - 60 }), team, [audience]), (error: any) => error?.code === 'access_invalid')
+  })
+
+  await t.test('rejects a token with the wrong issuer', async () => {
+    await assert.rejects(() => verifyAccessToken(await makeToken({ iss: 'https://attacker.example' }), team, [audience]), (error: any) => error?.code === 'access_invalid')
+  })
+
+  await t.test('rejects a tampered signature', async () => {
+    const token = await makeToken()
+    const parts = token.split('.')
+    const last = parts[2].at(-1) === 'A' ? 'B' : 'A'
+    parts[2] = parts[2].slice(0, -1) + last
+    await assert.rejects(() => verifyAccessToken(parts.join('.'), team, [audience]), (error: any) => error?.code === 'access_invalid')
+  })
+
+  globalThis.fetch = originalFetch
+})
