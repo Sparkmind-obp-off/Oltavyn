@@ -25,7 +25,8 @@ const bases: Record<ProviderId, [string, string]> = {
   groq: ['GROQ_BASE_URL', 'https://api.groq.com/openai/v1'],
   tavily: ['TAVILY_BASE_URL', 'https://api.tavily.com'],
   apify: ['APIFY_BASE_URL', 'https://api.apify.com/v2'],
-  scrapely: ['SCRAPELY_BASE_URL', 'https://api.scrape.ly/v2'],
+  // Scrape.ly endpoint and run path must be explicitly configured after official docs review.
+  scrapely: ['SCRAPELY_BASE_URL', ''],
 }
 const baseUrl = (env: ProviderEnv, id: ProviderId) => (env[bases[id][0]] || bases[id][1]).replace(/\/+$/, '')
 
@@ -41,9 +42,10 @@ export function providerStatus(env: ProviderEnv) {
   return PROVIDERS.map((p) => {
     const configured = !!env[p.secret]
     const enabled = providerEnabled(env, p.id)
+    const endpointReady = p.id !== 'scrapely' || (!!env.SCRAPELY_BASE_URL && !!env.SCRAPELY_RUN_PATH && env.SCRAPELY_BASE_URL.startsWith('https://') && env.SCRAPELY_RUN_PATH.startsWith('/'))
     return {
-      id: p.id, purpose: p.purpose, billing_note: p.billing, enabled,
-      state: !enabled ? 'disabled' : configured ? 'configured_unverified' : 'unconfigured',
+      id: p.id, purpose: p.purpose, billing_note: p.billing, enabled, endpoint_ready: endpointReady,
+      state: !enabled ? 'disabled' : !endpointReady ? 'endpoint_unverified' : configured ? 'configured_unverified' : 'unconfigured',
       ...(p.id === 'apify' || p.id === 'scrapely' ? { allowed_actors: allowedActors(env, p.id) } : {}),
     }
   })
@@ -121,7 +123,14 @@ export async function runActor(env: ProviderEnv, fetchImpl: FetchLike, id: 'apif
   if (input.confirm_run !== true) throw new ProviderError(400, 'explicit_approval_required', 'confirm_run=true wajib untuk setiap eksekusi. Konfirmasi bukan batas belanja.')
   const body = input.input && typeof input.input === 'object' && !Array.isArray(input.input) ? input.input : {}
   if (JSON.stringify(body).length > 20000) throw new ProviderError(400, 'input_too_large', 'Input Actor maksimal 20 KB.')
-  const path = id === 'apify' ? `/acts/${encodeURIComponent(actorId.replace('/', '~'))}/runs` : `/actors/${encodeURIComponent(actorId)}/runs`
+  let path: string
+  if (id === 'apify') path = `/acts/${encodeURIComponent(actorId.replace('/', '~'))}/runs`
+  else {
+    const configuredPath = String(env.SCRAPELY_RUN_PATH || '')
+    const configuredBase = baseUrl(env, 'scrapely')
+    if (!configuredBase.startsWith('https://') || !configuredPath.startsWith('/') || configuredPath.includes('..')) throw new ProviderError(503, 'provider_endpoint_unverified', 'Scrape.ly belum aktif: endpoint dan pola path resmi harus ditinjau lalu dikonfigurasi terlebih dahulu.')
+    path = configuredPath.replaceAll('{actorId}', encodeURIComponent(actorId))
+  }
   const data = await call(fetchImpl, id, `${baseUrl(env, id)}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const run = data?.data || data || {}
   return { provider: id, actor_id: actorId, run_id: str(run.id, 100) || null, status: str(run.status, 40) || 'submitted', dataset_id: str(run.defaultDatasetId, 100) || null, warning: 'Eksekusi Actor dapat mengonsumsi kredit provider. Hasil belum diimpor ke workspace.' }
