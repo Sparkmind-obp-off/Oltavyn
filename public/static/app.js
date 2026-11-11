@@ -163,7 +163,7 @@ function renderShell(pageFn, id) {
       ${state.workspaces.length ? html`<div class="ws-switch"><label for="ws-select">Workspace</label>
         <select id="ws-select">${state.workspaces.map((w) => html`<option value="${w.id}" ${w.id === state.wsId ? raw('selected') : ''}>${w.name}</option>`)}<option value="__new">+ Workspace baru</option></select></div>` : ''}
       ${state.workspaces.length ? html`<nav class="nav">${NAV.map(([k, label, step]) => html`<a href="#/${k}" ${page === k ? raw('aria-current="page"') : ''}><span class="step" aria-hidden="true">${step}</span>${label}</a>`)}</nav>` : ''}
-      <div class="sidebar-foot"><div>${state.user.display_name || state.user.email}</div><button class="btn btn-ghost btn-sm" id="logout-btn">Keluar</button></div>
+      <div class="sidebar-foot"><div>${state.user.display_name || state.user.email}</div><div class="small muted" style="margin-top:4px">Paket akun: <strong>${String(state.user.plan_code || "free").toUpperCase()}</strong></div><button class="btn btn-ghost btn-sm" id="logout-btn">Keluar</button></div>
     </aside>
     <main class="main" id="main" tabindex="-1"></main>
   </div>`.s
@@ -181,7 +181,7 @@ async function pagePublicCatalog() {
   app.innerHTML=html`
   <div class="public-catalog-wrap">
     <header class="public-catalog-nav"><div class="brand"><div class="brand-mark"><span></span></div><div><div class="brand-name" style="color:var(--brand)">OLTAVYN</div><div class="brand-sub">Agentic Affiliate OS</div></div></div><div class="row"><button class="btn btn-ghost" id="public-login">Masuk</button><button class="btn btn-primary" id="public-signup">Buat akun</button></div></header>
-    <section class="public-catalog-hero"><span class="package-kicker">OLTAVYN SERVICES</span><h1>Mulai dari strategi yang jelas. Tumbuhkan konten dengan sistem.</h1><p class="muted">Pilih dukungan riset, perencanaan kampanye, atau pendampingan operasional affiliate. Semua paket memiliki ruang lingkup dan batasan yang transparan.</p></section>
+    <section class="public-catalog-hero"><span class="package-kicker">OLTAVYN SERVICES</span><h1>Mulai dari strategi yang jelas. Tumbuhkan konten dengan sistem.</h1><p class="muted">Pilih dukungan riset, perencanaan kampanye, atau pendampingan operasional affiliate. Semua paket memiliki ruang lingkup dan batasan yang transparan. Akun baru otomatis memperoleh Free plan tanpa kartu pembayaran atau biaya berulang.</p></section>
     <section class="card package-card" style="margin:0 0 24px"><div class="package-kicker">CORE ACCESS · GRATIS</div><h2>OLTAVYN Free</h2><div class="package-price">Rp0 <small>/ selamanya</small></div><p class="muted">Buat akun menggunakan Google dan mulai workspace pertama tanpa kartu pembayaran. Anda dapat melihat paket layanan berbayar kapan saja.</p><button class="btn btn-primary" id="public-free-start">Mulai gratis dengan Google</button></section>
     <div data-public-catalog class="grid grid-3"><div class="card">${skeleton(3)}</div></div>
     <p class="small muted public-catalog-foot">Harga dan ruang lingkup dapat berubah sebelum checkout. Tidak ada jaminan penjualan atau pendapatan. Paket bulanan diperpanjang secara manual.</p>
