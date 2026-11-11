@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { ApiError, AppEnv, audit, newId, notFound, nowIso, rateLimit, sha256Hex } from '../lib/core'
 import { DURATIONS, generateAffiliatePackage } from '../lib/affiliateGenerator'
 import { ProviderEnv, ProviderError, groqGenerate, providerStatus, runActor, tavilySearch } from '../lib/providers'
-import { AGENT_POLICY_VERSION, AGENT_TOOLS, MAX_AGENT_STEPS_PER_RUN } from '../lib/agentRuntime'
+import { AGENT_POLICY_VERSION, AGENT_TOOLS, MAX_AGENT_STEPS_PER_RUN, authorizeTool } from '../lib/agentRuntime'
 
 // Affiliate OS API. Every read/write is scoped to a workspace owned by the caller (server-side, authoritative).
 export const affiliateApi = new Hono<AppEnv>()
