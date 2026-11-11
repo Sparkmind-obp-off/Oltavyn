@@ -172,3 +172,20 @@ dialog::backdrop { background: rgba(20,25,40,.45); }
   .auth-hero { padding: 32px 24px; }
   .kv { grid-template-columns: 1fr; }
 }
+
+/* Customer service catalog and order journey */
+.journey-steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.journey-steps span{padding:6px 10px;border-radius:999px;background:#f1efe9;color:var(--ink-3);font-size:.78rem;font-weight:600}
+.journey-steps .journey-active{background:var(--accent-soft);color:#7a5717}
+.grid-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.package-card{display:flex;flex-direction:column;align-items:stretch;min-width:0}
+.package-kicker{font-size:.7rem;letter-spacing:.13em;font-weight:700;color:var(--accent);margin-bottom:10px}
+.package-card h2{font-size:1.22rem}
+.package-price{font-size:1.55rem;font-weight:750;letter-spacing:-.03em;margin:10px 0 14px}
+.package-price small{font-size:.8rem;font-weight:500;color:var(--ink-3);letter-spacing:0}
+.package-card ul{padding-left:1.15rem;color:var(--ink-2);font-size:.88rem}
+.package-card li{margin:5px 0}
+.package-card details{margin-top:auto;color:var(--ink-3);font-size:.84rem}
+.package-card summary{cursor:pointer;font-weight:600}
+.order-item{margin-top:10px}
+@media(max-width:960px){.grid-3{grid-template-columns:1fr}}
