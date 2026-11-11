@@ -25,6 +25,7 @@ ok(s.find((p) => p.id === 'groq')!.state === 'configured_unverified', 'secret pr
 ok(!JSON.stringify(s).includes(SECRET), 'status never contains secret')
 ok(providerStatus({ GROQ_API_KEY: SECRET, PROVIDERS_ENABLED: 'false' }).every((p) => p.state === 'disabled'), 'global kill switch')
 ok(providerStatus({ TAVILY_ENABLED: 'false' }).find((p) => p.id === 'tavily')!.state === 'disabled', 'per-provider kill switch')
+ok(providerStatus({ SCRAPELY_TOKEN: SECRET }).find((p) => p.id === 'scrapely')!.state === 'endpoint_unverified', 'Scrape.ly remains locked without reviewed endpoint configuration')
 
 console.log('Missing keys / disabled')
 await rejects(groqGenerate({}, noNet, { prompt: 'x' }), 'provider_not_configured', 'groq without key fails safely, no network')
@@ -55,11 +56,15 @@ ok(t.results.length === 1 && t.results[0].status === 'lead_unreviewed' && !!t.re
 
 console.log('Actors')
 await rejects(runActor(env, noNet, 'apify', { actor_id: 'evil/actor', confirm_run: true }), 'actor_not_allowlisted', 'non-allowlisted actor refused')
+const scrapelyEnv = { SCRAPELY_TOKEN: SECRET, SCRAPELY_ALLOWED_ACTORS: 'approved/task' }
+await rejects(runActor(scrapelyEnv, noNet, 'scrapely', { actor_id: 'approved/task', confirm_run: true }), 'provider_endpoint_unverified', 'Scrape.ly refuses requests until official base URL and run path are configured')
 await rejects(runActor(env, noNet, 'apify', { actor_id: 'apify/web-scraper' }), 'explicit_approval_required', 'missing confirm_run refused')
 await rejects(runActor(env, noNet, 'apify', { actor_id: 'apify/web-scraper', confirm_run: 'true' }), 'explicit_approval_required', 'string "true" is not confirmation')
 await rejects(runActor(env, noNet, 'apify', { actor_id: 'apify/web-scraper', confirm_run: true, input: { big: 'x'.repeat(30000) } }), 'input_too_large', 'oversized input refused')
 const a = await runActor(env, mock(201, { data: { id: 'run1', status: 'READY', defaultDatasetId: 'ds1' } }), 'apify', { actor_id: 'apify/web-scraper', confirm_run: true, input: {} })
 ok(a.run_id === 'run1' && calls.at(-1)!.url.endsWith('/acts/apify~web-scraper/runs'), 'allowlisted + confirmed actor run submitted to official path')
+const sc = await runActor({ ...scrapelyEnv, SCRAPELY_BASE_URL: 'https://api.example.test', SCRAPELY_RUN_PATH: '/v1/tasks/{actorId}/runs' }, mock(202, { data: { id: 'scr1', status: 'QUEUED' } }), 'scrapely', { actor_id: 'approved/task', confirm_run: true, input: {} })
+ok(sc.run_id === 'scr1' && calls.at(-1)!.url === 'https://api.example.test/v1/tasks/approved%2Ftask/runs', 'Scrape.ly uses only explicitly configured HTTPS base URL and path')
 
 console.log('Timeout & redaction')
 const slow = groqGenerate(env, mock(200, {}, 20000), { prompt: 'x' })
