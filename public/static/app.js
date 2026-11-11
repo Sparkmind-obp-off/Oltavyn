@@ -182,16 +182,18 @@ async function pagePublicCatalog() {
   <div class="public-catalog-wrap">
     <header class="public-catalog-nav"><div class="brand"><div class="brand-mark"><span></span></div><div><div class="brand-name" style="color:var(--brand)">OLTAVYN</div><div class="brand-sub">Agentic Affiliate OS</div></div></div><div class="row"><button class="btn btn-ghost" id="public-login">Masuk</button><button class="btn btn-primary" id="public-signup">Buat akun</button></div></header>
     <section class="public-catalog-hero"><span class="package-kicker">OLTAVYN SERVICES</span><h1>Mulai dari strategi yang jelas. Tumbuhkan konten dengan sistem.</h1><p class="muted">Pilih dukungan riset, perencanaan kampanye, atau pendampingan operasional affiliate. Semua paket memiliki ruang lingkup dan batasan yang transparan.</p></section>
+    <section class="card package-card" style="margin:0 0 24px"><div class="package-kicker">CORE ACCESS · GRATIS</div><h2>OLTAVYN Free</h2><div class="package-price">Rp0 <small>/ selamanya</small></div><p class="muted">Buat akun menggunakan Google dan mulai workspace pertama tanpa kartu pembayaran. Anda dapat melihat paket layanan berbayar kapan saja.</p><button class="btn btn-primary" id="public-free-start">Mulai gratis dengan Google</button></section>
     <div data-public-catalog class="grid grid-3"><div class="card">${skeleton(3)}</div></div>
     <p class="small muted public-catalog-foot">Harga dan ruang lingkup dapat berubah sebelum checkout. Tidak ada jaminan penjualan atau pendapatan. Paket bulanan diperpanjang secara manual.</p>
   </div>`.s
-  $('#public-login').onclick=()=>renderAuth('login')
-  $('#public-signup').onclick=()=>renderAuth('register')
+  $('#public-login').onclick=()=>renderAuth()
+  $('#public-signup').onclick=()=>renderAuth()
+  $('#public-free-start').onclick=()=>renderAuth()
   try{
     const d=await api('GET','/public/catalog')
     const money=n=>new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n||0))
     $('[data-public-catalog]').innerHTML=d.catalog.map(item=>html`<article class="card package-card"><div class="package-kicker">SERVICE PACKAGE</div><h2>${item.name}</h2><p class="muted">${item.description}</p><div class="package-price">${money(item.price_idr)} <small>${item.billing_type==='monthly'?'/ bulan':'/ sekali'}</small></div><h3>Yang Anda dapatkan</h3><ul>${item.deliverables.map(x=>html`<li>${x}</li>`)}</ul><details><summary>Lihat batasan layanan</summary><ul>${item.exclusions.map(x=>html`<li>${x}</li>`)}</ul></details><button class="btn btn-primary" data-public-buy style="width:100%;margin-top:14px">Daftar untuk memilih paket</button></article>`).map(x=>x.s).join('')
-    $$('[data-public-buy]').forEach(b=>b.onclick=()=>renderAuth('register'))
+    $('[data-public-buy]').forEach(b=>b.onclick=()=>renderAuth())
     if(!d.checkout_enabled) $('[data-public-catalog]').insertAdjacentHTML('beforebegin','<div class="alert alert-info">Katalog tersedia untuk ditinjau. Pemesanan dan pembayaran akan dibuka setelah konfigurasi dan pengujian selesai.</div>')
   }catch(e){$('[data-public-catalog]').innerHTML=errorBox(e).s}
 }
