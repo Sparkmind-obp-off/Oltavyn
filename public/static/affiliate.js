@@ -199,7 +199,7 @@ async function loadProviders() {
     $('#tavily-form button').disabled = !can('tavily')
     $('#apify-form button').disabled = !can('apify') || !(byId.apify.allowed_actors || []).length
     $('#scrapely-form button').disabled = !can('scrapely') || !(byId.scrapely.allowed_actors || []).length
-    if (byId.scrapely.state === 'endpoint_unverified') $('#scrapely-result').textContent = 'Dikunci: SCRAPELY_BASE_URL dan SCRAPELY_RUN_PATH belum disiapkan berdasarkan dokumentasi resmi.'
+    if (byId.scrapely.state === 'endpoint_unverified') $('#scrapely-result').textContent = 'Scrape.ly menggunakan API resmi v2. Siapkan SCRAPELY_TOKEN dan Actor allowlist.'
     else if (!can('scrapely')) $('#scrapely-result').textContent = 'Scrape.ly belum siap. Periksa secret, kill switch, endpoint, dan allowlist.'
   } catch (e) { el.innerHTML = '<p class="msg bad">' + esc(e.message) + '</p>' }
   await loadProviderUsage()
@@ -252,6 +252,9 @@ for (const id of ['apify', 'scrapely']) {
         const d = await api('POST', '/affiliate/providers/' + id + '/run', {
           actor_id: form.elements.actor_id.value.trim(),
           input: actorInput,
+          max_total_charge_usd: Number(form.elements.max_total_charge_usd.value),
+          max_items: Number(form.elements.max_items.value),
+          timeout_seconds: Number(form.elements.timeout_seconds.value),
           confirm_run: true,
         })
         out.textContent = JSON.stringify(d, null, 2) + '\n\nStatus: baru dikirim. Hasil dataset belum diimpor ke workspace.'
