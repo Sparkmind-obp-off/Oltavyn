@@ -33,7 +33,7 @@ const uid = (c: any) => c.get('user').id
 // Catalog is authenticated for now; price and scope always come from server-side D1.
 api.get('/catalog', async c => {
   const rows = await c.env.DB.prepare("SELECT sku,name,description,price_idr,billing_type,deliverables_json,exclusions_json FROM commercial_catalog WHERE status='active' ORDER BY sort_order").all()
-  return c.json({ checkout_enabled: (c.env as any).DUITKU_CHECKOUT_ENABLED === 'true', catalog: (rows.results as any[]).map(r=>({...r,currency:'IDR',deliverables:JSON.parse(r.deliverables_json),exclusions:JSON.parse(r.exclusions_json)})) })
+  return c.json({ checkout_enabled: (c.env as any).DUITKU_CHECKOUT_ENABLED === 'true' && !!(c.env as any).DUITKU_MERCHANT_CODE && !!(c.env as any).DUITKU_API_KEY, catalog: (rows.results as any[]).map(r=>({...r,currency:'IDR',deliverables:JSON.parse(r.deliverables_json),exclusions:JSON.parse(r.exclusions_json)})) })
 })
 
 // Every order is bound to a workspace owned by the authenticated user.
