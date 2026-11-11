@@ -38,12 +38,12 @@ Unknown values must remain unknown (NULL), not zero. Hypotheses must be labelled
 
 The previous production D1 UUID `94c9a84b-7fa8-49a4-b9f2-8006450a767b` is still referenced by the live Pages project, but is absent from the currently accessible D1 database list. Do not silently overwrite the binding or assume its data is disposable.
 
-A separate empty preview database has been created:
-- Name: `oltavyn-preview`
-- UUID: `32386f39-80f9-40a1-adb7-a3970a168916`
+The temporary `oltavyn-preview` database was deleted after the owner directed the work to go directly to production. A new empty production database was created:
+- Name: `oltavyn-production`
+- UUID: `2456b40f-2d4c-45f6-a10f-82d17606d856`
 - Region: APAC
 
-The feature branch Wrangler config uses this database as its default/preview D1 binding. The production environment retains the legacy ID until the owner decides whether it can be replaced. A request to create a replacement `oltavyn-production` database was rejected by Cloudflare because the account limit is 10 D1 databases and all 10 slots are now occupied. Do not delete another project's database without explicit approval. Do not apply production migrations.
+The feature branch Wrangler config now points directly to this production database. The previous production UUID `94c9a84b-7fa8-49a4-b9f2-8006450a767b` was not found (7404); old data has not been recovered. Do not claim old accounts/workspaces are restored.
 
 Next:
 1. Verify the preview binding in the Pages project after a preview deployment.
@@ -109,7 +109,7 @@ For each provider, document official docs URL, eligibility, auth scopes, data se
 - [ ] Accessibility, empty/loading/error states and Indonesian copy reviewed
 - [ ] Backup, recovery, rollback and data-retention behavior documented
 - [ ] Actual local verification outputs recorded
-- [ ] Preview deployment tested before production proposal
+- [ ] Production deployment uses reviewed `main` commit and exact D1 binding
 
 ## 6. Final handoff format
 
