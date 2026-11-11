@@ -21,7 +21,7 @@ This document describes **only what is implemented and tested in this branch**. 
 | Cross-workspace isolation | Not tested | 14 negative tests | smoke "Isolation" |
 | Provider safety | Forwarded upstream error bodies; no timeout; no allowlist; status = "configured" | Timeout 15 s, error mapping, no upstream body, kill switches, Actor allowlist, `configured_unverified` state, injectable fetch | `tests/providers.test.ts` 29/29 |
 | Operator UI | Two forms + tables | Tabs: overview/next action, products, product detail (edit, evidence, scorecard, pipeline, experiments), channels, providers & cost | browser console check: 0 errors |
-| CI | typecheck/build/smoke | + provider mock tests + affiliate smoke | `.github/workflows/verify.yml` |
+| Release verification | CI workflow intentionally removed per owner policy | Manual local verification via `npm run test:all`; preview release is operator-triggered | `docs/MANUAL_RELEASE_AND_PROVIDER_RUNBOOK.md` |
 
 ## 2. Data model
 
