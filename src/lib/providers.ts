@@ -88,7 +88,7 @@ export async function groqGenerate(env: ProviderEnv, fetchImpl: FetchLike, input
   const model = /^[A-Za-z0-9._\-\/]{1,100}$/.test(input.model || '') ? input.model! : 'llama-3.3-70b-versatile'
   const data = await call(fetchImpl, 'groq', `${baseUrl(env, 'groq')}/chat/completions`, {
     method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: [{ role: 'system', content: GROQ_SYSTEM }, { role: 'user', content: prompt }], temperature: 0.4, max_tokens: 1800 }),
+    body: JSON.stringify({ model, messages: [{ role: 'system', content: GROQ_SYSTEM }, { role: 'user', content: prompt }], temperature: 0.4, max_completion_tokens: 1800 }),
   })
   return { provider: 'groq', model: str(data?.model, 100) || model, text: str(data?.choices?.[0]?.message?.content, 20000), usage: data?.usage && typeof data.usage === 'object' ? { prompt_tokens: Number(data.usage.prompt_tokens) || null, completion_tokens: Number(data.usage.completion_tokens) || null, total_tokens: Number(data.usage.total_tokens) || null } : null, persisted: false, label: 'DRAF AI — belum disimpan, wajib ditinjau' }
 }
