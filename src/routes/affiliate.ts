@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { ApiError, AppEnv, audit, newId, notFound, nowIso, rateLimit, sha256Hex } from '../lib/core'
 import { DURATIONS, generateAffiliatePackage } from '../lib/affiliateGenerator'
 import { ProviderEnv, ProviderError, groqGenerate, providerStatus, runActor, tavilySearch } from '../lib/providers'
+import { AGENT_POLICY_VERSION, AGENT_TOOLS, MAX_AGENT_STEPS_PER_RUN } from '../lib/agentRuntime'
 
 // Affiliate OS API. Every read/write is scoped to a workspace owned by the caller (server-side, authoritative).
 export const affiliateApi = new Hono<AppEnv>()
@@ -296,6 +297,32 @@ affiliateApi.delete('/products/:id/experiments/:experimentId/:channelId', async 
 
 // ---------- OLTAVYN Agent: workspace-aware live chat ----------
 function safeJson(value: unknown) { try { return JSON.stringify(value) } catch { return '{}' } }
+// Runtime discovery is workspace-authorized; only enabled, read-only tools are executable in Phase 1.
+affiliateApi.get('/agent/tools', async (c) => {
+  const workspaceId = text(c.req.query('workspace_id'), 100)
+  if (!workspaceId) throw new ApiError(400, 'workspace_required', 'Workspace wajib dipilih.')
+  const ws = await workspace(c, workspaceId)
+  return c.json({
+    policy_version: AGENT_POLICY_VERSION,
+    max_steps_per_run: MAX_AGENT_STEPS_PER_RUN,
+    tools: AGENT_TOOLS.map(({ id, version, description, permission, input, approval, enabled }) => ({ id, version, description, permission, input, approval, enabled })),
+    workspace_id: ws.id,
+    note: 'Tool discovery only. Mutations, paid Actors and publishing remain disabled until their approval and execution flows are implemented.',
+  })
+})
+affiliateApi.get('/agent/runs', async (c) => {
+  const workspaceId = text(c.req.query('workspace_id'), 100)
+  if (!workspaceId) throw new ApiError(400, 'workspace_required', 'Workspace wajib dipilih.')
+  const ws = await workspace(c, workspaceId)
+  const { results } = await c.env.DB.prepare('SELECT id, intent, state, policy_version, created_at, updated_at FROM agent_runs WHERE workspace_id=? AND user_id=? ORDER BY created_at DESC LIMIT 50').bind(ws.id, uid(c)).all()
+  return c.json({ runs: results })
+})
+affiliateApi.get('/agent/runs/:id/steps', async (c) => {
+  const run = await c.env.DB.prepare('SELECT id FROM agent_runs WHERE id=? AND user_id=?').bind(c.req.param('id'), uid(c)).first<any>()
+  if (!run) throw notFound()
+  const { results } = await c.env.DB.prepare('SELECT id, step_index, tool_id, tool_version, permission_class, status, input_json, output_json, error_code, started_at, completed_at, created_at FROM agent_run_steps WHERE run_id=? ORDER BY step_index ASC').bind(run.id).all()
+  return c.json({ steps: results })
+})
 affiliateApi.get('/agent/conversations', async (c) => {
   const workspaceId = text(c.req.query('workspace_id'), 100)
   if (!workspaceId) throw new ApiError(400, 'workspace_required', 'Workspace wajib dipilih.')
