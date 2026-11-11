@@ -91,9 +91,10 @@ api.patch('/revisions/:id',async c=>{
   if(!revision) throw new ApiError(404,'not_found','Permintaan revisi tidak ditemukan.')
   if(revision.status!=='open') throw new ApiError(409,'revision_already_handled','Permintaan revisi ini sudah diproses.')
   if(status==='accepted') {
-    const job=await c.env.DB.prepare('SELECT revision_count,revision_limit FROM commercial_service_jobs WHERE id=?').bind(revision.job_id).first<any>()
+    const job=await c.env.DB.prepare('SELECT revision_count,revision_limit,order_id FROM commercial_service_jobs WHERE id=?').bind(revision.job_id).first<any>()
     if(!job || job.revision_count>=job.revision_limit) throw new ApiError(409,'revision_limit_reached','Batas revisi paket ini telah digunakan.')
     await c.env.DB.prepare("UPDATE commercial_service_jobs SET revision_count=revision_count+1,status='in_progress',updated_at=? WHERE id=? AND revision_count<revision_limit").bind(nowIso(),revision.job_id).run()
+    await c.env.DB.prepare("UPDATE commercial_orders SET status='processing',updated_at=? WHERE id=? AND status='delivered'").bind(nowIso(),job.order_id).run()
   }
   await c.env.DB.prepare('UPDATE commercial_revision_requests SET status=?,admin_note=?,updated_at=? WHERE id=? AND status=\'open\'').bind(status,note||null,nowIso(),revision.id).run()
   await c.env.DB.prepare('INSERT INTO commercial_job_events (id,job_id,actor_user_id,event_type,note,created_at) VALUES (?,?,?,\'revision_updated\',?,?)').bind(newId('jev'),revision.job_id,uid(c),status+': '+note,nowIso()).run()
