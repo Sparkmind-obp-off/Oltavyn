@@ -46,7 +46,9 @@ For local development, use Wrangler's local secret mechanism or an untracked `.d
 GROQ_API_KEY=
 TAVILY_API_KEY=
 APIFY_API_TOKEN=
-SCRAPELY_TOKEN=\nSCRAPELY_BASE_URL=\nSCRAPELY_RUN_PATH=
+SCRAPELY_TOKEN=
+SCRAPELY_BASE_URL=
+SCRAPELY_RUN_PATH=
 ```
 
 No credentials are supplied by this repository. No provider is configured merely because an adapter exists.
