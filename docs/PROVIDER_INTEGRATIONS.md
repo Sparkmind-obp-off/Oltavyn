@@ -1,6 +1,6 @@
 # OLTAVYN Provider Integrations
 
-Status: adapter code committed on the Affiliate OS feature branch; credentials and external calls are not configured or verified.
+Status: Multi-Provider Hub UI and backend adapters are implemented on `feat/multi-provider-hub`; credentials and external calls are not configured or verified.
 
 ## Product boundary
 
@@ -16,7 +16,7 @@ Status: adapter code committed on the Affiliate OS feature branch; credentials a
 | Groq | LLM draft generation | `POST /api/affiliate/providers/groq/generate` | `GROQ_API_KEY` |
 | Tavily | Search/research source discovery | `POST /api/affiliate/providers/tavily/search` | `TAVILY_API_KEY` |
 | Apify | Explicitly approved Actor run request | `POST /api/affiliate/providers/apify/run` | `APIFY_API_TOKEN` |
-| Scrape.ly | Explicitly approved Actor run request | `POST /api/affiliate/providers/scrapely/run` | `SCRAPELY_TOKEN` |
+| Scrape.ly | Explicitly approved task/Actor run request; fail-closed until official endpoint is reviewed | `POST /api/affiliate/providers/scrapely/run` | `SCRAPELY_TOKEN` plus `SCRAPELY_BASE_URL` and `SCRAPELY_RUN_PATH` |
 
 All endpoints require an authenticated OLTAVYN session. Keys are read only from Worker environment bindings; they are never returned by the provider status endpoint, written to D1, or sent to browser JavaScript.
 
@@ -30,7 +30,9 @@ Uses the Search API with basic depth and a small result count. Returned source U
 
 ### Apify and Scrape.ly
 
-Both adapters accept a caller-supplied Actor ID and JSON input. Each run requires `confirm_run: true`, is rate-limited, and returns the run/dataset identifiers only. The adapter does not select an Actor, retrieve datasets, import records, or publish content automatically.
+Both adapters accept a caller-supplied Actor ID and JSON input. Each run requires `confirm_run: true`, is rate-limited, and returns the run/dataset identifiers only. The adapter does not select an Actor, retrieve datasets, import records, or publish content automatically. The Multi-Provider Hub UI requires a second explicit browser confirmation and disables execution unless the provider secret is present and the Actor allowlist is non-empty.
+
+Apify uses its documented `/acts/{actorId}/runs` API path. Scrape.ly is intentionally fail-closed: no default API base URL or run path is assumed. It requires HTTPS `SCRAPELY_BASE_URL` and a reviewed `SCRAPELY_RUN_PATH` beginning with `/`, with `{actorId}` placeholder where appropriate. Do not configure these until the official vendor API documentation, authentication, request schema, terms and pricing are verified.
 
 **Cost safety:** an Actor run may consume a provider's prepaid balance or paid credits even when the account has a free allowance. Do not call these endpoints unless the operator has inspected the Actor, its input schema, terms, and expected cost, and explicitly confirms that individual run. The confirmation flag is not a spending cap.
 
@@ -44,7 +46,7 @@ For local development, use Wrangler's local secret mechanism or an untracked `.d
 GROQ_API_KEY=
 TAVILY_API_KEY=
 APIFY_API_TOKEN=
-SCRAPELY_TOKEN=
+SCRAPELY_TOKEN=\nSCRAPELY_BASE_URL=\nSCRAPELY_RUN_PATH=
 ```
 
 No credentials are supplied by this repository. No provider is configured merely because an adapter exists.
@@ -57,6 +59,14 @@ No credentials are supplied by this repository. No provider is configured merely
 - Groq provides API access through API keys; model access and rate limits depend on the current account and model. Do not assume unlimited free inference. See [Groq API reference](https://console.groq.com/docs/api-reference).
 
 Pricing and terms change. Re-check provider dashboards before enabling a run. No payment method, subscription, credit purchase, or paid request is initiated by this code.
+
+## Multi-Provider Hub UI and observability
+
+- `/affiliate` → Provider tab now exposes status cards and separate Groq, Tavily, Apify and Scrape.ly task forms.
+- `/api/affiliate/providers` reports configuration-only state and allowlisted Actor IDs; it never reveals secrets.
+- `/api/affiliate/providers/usage` aggregates audit-log call counts and last-call timestamps over 30 days. This is not token, credit, balance, or monetary cost metering.
+- Actor forms require a JSON object, a visible acknowledgement checkbox, a browser confirmation dialog, server-side `confirm_run: true`, and an allowlisted Actor ID.
+- The UI never accepts provider API keys. Configure them only in Cloudflare Pages → Settings → Variables and Secrets.
 
 ## Current limitations
 
