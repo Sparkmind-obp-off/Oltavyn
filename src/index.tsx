@@ -6,6 +6,7 @@ import { api } from './routes/domain'
 import { affiliateApi } from './routes/affiliate'
 import commercialApi, { duitkuWebhook } from './routes/commercial'
 import adminApi from './routes/admin'
+import { requireCloudflareAccess } from './lib/cloudflareAccess'
 const app = new Hono<AppEnv>()
 app.use('*', async(c,next)=>{
   let clerkOrigin=''
@@ -23,6 +24,10 @@ app.get('/api/public/catalog',async(c)=>{
   const env=c.env as any
   return c.json({checkout_enabled:env.DUITKU_CHECKOUT_ENABLED==='true'&&!!env.DUITKU_MERCHANT_CODE&&!!env.DUITKU_API_KEY,catalog:(rows.results as any[]).map(r=>({...r,currency:'IDR',deliverables:JSON.parse(r.deliverables_json),exclusions:JSON.parse(r.exclusions_json)}))})
 })
+app.use('/admin',requireCloudflareAccess)
+app.use('/admin/*',requireCloudflareAccess)
+app.use('/api/admin',requireCloudflareAccess)
+app.use('/api/admin/*',requireCloudflareAccess)
 app.use('/api/*',requireAuth)
 app.route('/api',api)
 app.route('/api/affiliate',affiliateApi)
