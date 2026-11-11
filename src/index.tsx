@@ -5,6 +5,7 @@ import { auth, csrfGuard, requireAuth } from './routes/auth'
 import { api } from './routes/domain'
 import { affiliateApi } from './routes/affiliate'
 import commercialApi, { duitkuWebhook } from './routes/commercial'
+import adminApi from './routes/admin'
 const app = new Hono<AppEnv>()
 app.use('*', async(c,next)=>{
   let clerkOrigin=''
@@ -26,6 +27,7 @@ app.use('/api/*',requireAuth)
 app.route('/api',api)
 app.route('/api/affiliate',affiliateApi)
 app.route('/api/commercial',commercialApi)
+app.route('/api/admin',adminApi)
 const shell=`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OLTAVYN — Agentic Content OS</title><meta name="description" content="Workbench berbasis bukti: Riset → Peluang → Konten → Publikasi → Pembelajaran."><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"><link rel="stylesheet" href="/static/app.css"></head><body><a class="skip-link" href="#main">Lewati ke konten</a><div id="app" aria-live="polite"><p class="boot">Memuat OLTAVYN…</p></div><script type="module" src="/static/app.js"></script></body></html>`
 const affiliateShell=`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Affiliate OS — OLTAVYN</title><link rel="stylesheet" href="/static/affiliate.css"></head><body><main class="wrap" id="main">
 <header class="top"><div><div class="muted small">AVORLUNE · OLTAVYN / PRODUK 01</div><h1 style="margin:5px 0">Affiliate OS</h1><div class="muted small">Product Intelligence · Scorecard · Content Factory · Publikasi manual</div></div><div class="row"><a href="/">← Core Engine</a><span id="who" class="pill">Memeriksa sesi…</span></div></header>
@@ -119,6 +121,8 @@ const affiliateShell=`<!doctype html><html lang="id"><head><meta charset="utf-8"
 </section>
 </section></main><script src="/static/affiliate.js" defer></script></body></html>`
 app.get('/affiliate',(c)=>c.html(affiliateShell))
+app.get('/admin',(c)=>c.html(adminShell))
+app.get('/admin/*',(c)=>c.html(adminShell))
 app.get('*',(c)=>c.html(shell))
 app.onError((err,c)=>{if(err instanceof ApiError)return c.json({error:{code:err.code,message:err.message,details:err.details??null}},err.status as any);const reqId=crypto.randomUUID();console.error(JSON.stringify({reqId,path:c.req.path,err:String((err as Error)?.message||err).slice(0,300)}));return c.json({error:{code:'internal_error',message:'Terjadi kesalahan di server.',request_id:reqId}},500)})
 export default app
