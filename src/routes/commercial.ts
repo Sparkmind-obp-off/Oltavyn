@@ -81,18 +81,22 @@ api.post('/orders/:id/checkout', async c => {
   if (previous?.payment_url) return c.json({payment_url:previous.payment_url,reference:previous.reference,merchant_order_id:previous.merchant_order_id,reused:true})
   const cfg = duitkuConfig(c.env as unknown as DuitkuEnv)
   const items = await c.env.DB.prepare('SELECT name_snapshot,quantity,line_total_idr FROM commercial_order_items WHERE order_id=?').bind(order.id).all<any>()
-  const productDetails = items.results.map((x:any)=>({name:x.name_snapshot,price:x.line_total_idr,quantity:x.quantity}))
+  const itemDetails = items.results.map((x:any)=>({name:String(x.name_snapshot).slice(0,50),price:Number(x.line_total_idr),quantity:Number(x.quantity)}))
+  const timestamp = String(Date.now())
+  const signature = await hmacHex(cfg.key,cfg.merchant+timestamp)
   const payload = {
-    merchantCode:cfg.merchant,paymentAmount:order.total_idr,paymentMethod:'',
-    merchantOrderId:order.merchant_order_id,productDetails:productDetails.map((x:any)=>x.name).join(', ').slice(0,255),
-    customerVaName:'OLTAVYN Customer',email:c.get('user').email,
+    paymentAmount:order.total_idr,
+    merchantOrderId:order.merchant_order_id,
+    productDetails:'OLTAVYN - '+itemDetails.map((x:any)=>x.name).join(', ').slice(0,220),
+    paymentMethod:'',
+    customerVaName:'OLTAVYN Customer',
+    email:c.get('user').email,
+    itemDetails,
     callbackUrl:cfg.origin+'/api/webhooks/duitku/pop',
     returnUrl:cfg.origin+'/payment/return?order='+encodeURIComponent(order.id),
-    signature:await hmacHex(cfg.key,cfg.merchant+Date.now()+'' ) // replaced below with exact timestamp-bound signature
+    expiryPeriod:60
   }
-  const timestamp = String(Date.now())
-  payload.signature = await hmacHex(cfg.key,cfg.merchant+timestamp)
-  const response = await fetch(cfg.base+'/api/merchant/createInvoice',{method:'POST',headers:{'Content-Type':'application/json','x-duitku-timestamp':timestamp,'x-duitku-signature':payload.signature,'x-duitku-merchantcode':cfg.merchant},body:JSON.stringify({...payload,signature:undefined})})
+  const response = await fetch(cfg.base+'/api/merchant/createInvoice',{method:'POST',headers:{'Content-Type':'application/json','x-duitku-timestamp':timestamp,'x-duitku-signature':signature,'x-duitku-merchantcode':cfg.merchant},body:JSON.stringify(payload)})
   const data:any = await response.json().catch(()=>null)
   if (!response.ok || !data?.paymentUrl || !data?.reference) throw new ApiError(502,'duitku_invoice_failed','Duitku belum berhasil membuat invoice.',{provider_status:response.status,provider_message:clean(data?.Message || data?.message,240)})
   const paymentId = newId('pay'), now = nowIso()
