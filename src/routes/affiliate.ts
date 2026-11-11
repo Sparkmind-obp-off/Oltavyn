@@ -375,6 +375,7 @@ affiliateApi.post('/agent/runs', async (c) => {
     await audit(c.env.DB, { workspace_id: ws.id, actor_user_id: uid(c), action: 'agent.run.completed', resource_type: 'agent_run', resource_id: runId })
     return c.json({ run_id: runId, state: 'completed', outputs, policy_version: AGENT_POLICY_VERSION }, 201)
   } catch (e) {
+    await c.env.DB.prepare("UPDATE agent_run_steps SET status='failed',error_code='execution_failed',completed_at=? WHERE run_id=? AND status='running'").bind(nowIso(), runId).run()
     await c.env.DB.prepare("UPDATE agent_runs SET state='failed',updated_at=? WHERE id=?").bind(nowIso(), runId).run()
     await audit(c.env.DB, { workspace_id: ws.id, actor_user_id: uid(c), action: 'agent.run.failed', resource_type: 'agent_run', resource_id: runId, outcome: 'failed' })
     throw e
