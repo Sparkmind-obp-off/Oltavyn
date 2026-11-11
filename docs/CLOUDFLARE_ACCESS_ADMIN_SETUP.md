@@ -14,16 +14,24 @@ The Worker verifies the `Cf-Access-Jwt-Assertion` signature against the Cloudfla
 
 ## Cloudflare dashboard setup
 
-Do this in the Cloudflare account that owns the OLTAVYN production hostname.
+The Access application has already been created in the connected Cloudflare account as **OLTAVYN Command Center — Admin Only**. Its exact-email Allow policy is restricted to the connected Cloudflare account identity; its session duration is 8 hours and its Cloudflare identity provider is selected.
 
-1. Open **Zero Trust → Access controls → Applications**.
-2. Create a **Self-hosted** application for the OLTAVYN production hostname and the path `/admin*` (include the base `/admin` path if the UI asks for an explicit pattern).
-3. Create an Allow policy with **Include → Emails** and enter only the exact trusted operator email addresses. Do not allow an entire email domain.
-4. Set an appropriate short session duration (for example, 8 hours) and use an identity provider with MFA enabled.
-5. Protect the API path `/api/admin*` as well. If the dashboard allows multiple hostname/path entries on one Access application, add it to the same application. If it requires a separate application, create a second Self-hosted application with the same Allow policy and record its distinct Application Audience (AUD) tag.
-6. Do not create a catch-all Access application on the whole OLTAVYN hostname: customers must continue using the public customer app.
-7. Repeat the path protection for every production hostname that can reach the Pages project, including the custom domain and the production `.pages.dev` hostname if it remains publicly reachable. Do not assume protecting one hostname protects another.
-8. Preview deployments are separate hostnames. Keep them private using Pages **Settings → General → Enable access policy**; configure preview environment bindings separately from production.
+Protected destinations are:
+
+- `oltavyn.biz.id/admin`, `oltavyn.biz.id/admin/*`
+- `oltavyn.biz.id/api/admin`, `oltavyn.biz.id/api/admin/*`
+- `oltavyn.pages.dev/admin`, `oltavyn.pages.dev/admin/*`
+- `oltavyn.pages.dev/api/admin`, `oltavyn.pages.dev/api/admin/*`
+- `affiliate-os.avorlune.biz.id/admin`, `affiliate-os.avorlune.biz.id/admin/*`
+- `affiliate-os.avorlune.biz.id/api/admin`, `affiliate-os.avorlune.biz.id/api/admin/*`
+- `*.oltavyn.pages.dev/admin`, `*.oltavyn.pages.dev/admin/*`
+- `*.oltavyn.pages.dev/api/admin`, `*.oltavyn.pages.dev/api/admin/*`
+
+Both the base path and wildcard child path are included because a path wildcard does not cover its parent path. Customer paths are not covered by this Access application.
+
+To review or change it, open **Zero Trust → Access controls → Applications**. Do not replace the exact-email policy with an entire email-domain rule.
+
+Preview deployment URLs are separate hostnames. The wildcard destinations above cover OLTAVYN preview subdomains. Keep preview deployments on a separate D1 database and configure preview bindings separately from production; the preview D1 binding was not changed as part of this work.
 
 Cloudflare documentation:
 - https://developers.cloudflare.com/cloudflare-one/applications/configure-apps/self-hosted-apps/
@@ -32,7 +40,7 @@ Cloudflare documentation:
 
 ## Required server-side variables
 
-Set these as server-side Cloudflare Pages/Workers variables. Never use `VITE_` prefixes and never commit secrets.
+The three production variables below have already been added to the OLTAVYN Pages project's production environment. They take effect on the next deployment; the current production deployment has not been replaced. Preview variables and database bindings were deliberately left unchanged. Never use `VITE_` prefixes and never commit secrets.
 
 | Variable | Value |
 |---|---|
