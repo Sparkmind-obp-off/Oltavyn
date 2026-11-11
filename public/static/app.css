@@ -212,3 +212,17 @@ dialog::backdrop { background: rgba(20,25,40,.45); }
 .public-catalog-hero p{font-size:1.05rem;max-width:640px}
 .public-catalog-foot{margin-top:20px}
 @media(max-width:700px){.public-catalog-wrap{padding:16px}.public-catalog-nav{align-items:flex-start}.public-catalog-nav .row{gap:6px}.public-catalog-hero{padding:36px 0 24px}}
+
+
+/* Google-only customer authentication: hide manual identifier/password flows. */
+.clerk-auth-slot .cl-formFieldRow,
+.clerk-auth-slot .cl-formButtonPrimary,
+.clerk-auth-slot .cl-dividerRow,
+.clerk-auth-slot .cl-footerAction,
+.clerk-auth-slot .cl-formFieldAction,
+.clerk-auth-slot .cl-alternativeMethods {
+  display: none !important;
+}
+.clerk-auth-slot .cl-socialButtonsBlockButton {
+  width: 100%;
+}
