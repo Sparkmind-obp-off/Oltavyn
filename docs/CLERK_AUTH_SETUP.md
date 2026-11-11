@@ -1,55 +1,64 @@
-# OLTAVYN — Clerk Authentication Setup
+# OLTAVYN — Google-only Authentication
 
-Status: Clerk integration code is committed. Google sign-in requires configuration in Clerk Dashboard and Cloudflare. Do not enable Clerk variables until migration 0007_clerk_identity.sql has been applied to the target D1 database.
+Status: application code supports Google-only sign-up and sign-in. The Google provider and credential settings must still be configured in the Clerk Dashboard. Apply migration `0009_free_customer_plan.sql` before enabling the updated Worker code.
 
-## Authentication architecture
+## Customer experience
 
-- Clerk owns sign-up, sign-in, email verification, session lifecycle and Google OAuth.
-- OLTAVYN remains the application and authorization authority: each verified Clerk user maps to an internal users.id; workspace authorization continues to use that internal ID.
-- The Clerk __session JWT is verified in the Cloudflare Worker using the Clerk JWT public key (RS256), expiry, optional issuer pinning and an authorized-party allowlist.
-- First sign-in retrieves the Clerk user profile server-to-server and requires a verified primary email before creating/linking an internal account.
-- Existing password accounts and sessions remain available for compatibility; the sign-in UI switches to Clerk when all three required Clerk settings exist.
-- No Clerk secret or JWT public key is sent to the browser.
+- Customers can sign up and sign in only with Google.
+- The first successful Google sign-in automatically provisions an OLTAVYN account.
+- The first login also links an existing OLTAVYN account only when its email exactly matches Google's verified primary email.
+- No email/password registration, email/password login, or password reset flow is offered. The legacy `POST /api/auth/register` and `POST /api/auth/login` endpoints return HTTP 410.
+- The email address returned by Google remains stored as the account's verified contact/identity field. It is not a separate login method.
+- Every new account starts on the permanent Free core plan (`plan_tier=free`, `plan_status=active`). Free is not a timed trial and does not require a payment card. Paid service packages remain separate catalog purchases.
+- After sign-in, a new customer completes the first-workspace onboarding flow.
 
-## Clerk Dashboard setup
+## Clerk Dashboard — required manual configuration
 
-1. Create a Clerk application for OLTAVYN.
-2. In User & authentication → Social connections, enable Google and complete Google's OAuth configuration as required by Clerk.
-3. Enable email verification. OLTAVYN only provisions accounts with a verified primary email.
-4. In Domains, add the actual OLTAVYN production hostname and intended preview/development hostnames.
-5. In API keys, copy the publishable key, secret key and JWT public key (PEM public key).
-6. Record the exact Clerk issuer from a verified session token or Clerk instance configuration if issuer pinning is desired.
+Configure both the Clerk development instance and production instance separately.
 
-Google is not automatically enabled by this code. It appears in the Clerk sign-in/sign-up UI only after the Google social connection is enabled in Clerk Dashboard.
+1. Open **User & authentication → Social connections**.
+2. Enable **Google** for both sign-up and sign-in. Complete Google's OAuth client configuration.
+3. Under **User & authentication → Email**, disable email-code/passwordless email sign-in and any email-based sign-in option.
+4. Under **User & authentication → Password**, disable password authentication.
+5. Disable other identifiers/providers not intended for customer access (phone, username, passkeys, and other social providers). Keep Google as the only enabled customer authentication method.
+6. Ensure Google returns the user's verified primary email. OLTAVYN rejects an account without a verified primary email.
+7. Add the exact production and intended preview origins to Clerk's allowed domains / authorized parties.
+8. For the production Google OAuth app, complete Google's publishing/verification requirements. A development OAuth app may be restricted to test users.
 
-## Cloudflare Pages / Worker variables
+Clerk documentation:
+- https://clerk.com/docs/guides/configure/auth-strategies/social-connections/google
+- https://clerk.com/docs/guides/configure/auth-strategies/sign-up-sign-in-options
 
-Set these on the OLTAVYN Cloudflare project. Use test keys for development and live keys only for production.
+## Cloudflare Pages / Worker configuration
 
-| Variable / Secret | Value | Exposure |
-|---|---|---|
-| CLERK_PUBLISHABLE_KEY | Clerk publishable key | Public configuration returned to the app |
-| CLERK_SECRET_KEY | Clerk secret key | Secret only |
-| CLERK_JWT_PUBLIC_KEY | PEM public key from Clerk | Worker-only variable/secret |
-| CLERK_AUTHORIZED_PARTIES | Comma-separated exact origins, e.g. https://oltavyn.pages.dev | Worker-only variable |
-| CLERK_ISSUER | Optional exact iss claim from Clerk | Worker-only variable |
+Set these on the OLTAVYN project. Never paste secrets into GitHub, browser code, or chat.
 
-Do not paste keys into GitHub, source files, browser code, or chat. Never use development pk_test_/sk_test_ keys on production.
+| Variable / Secret | Purpose |
+|---|---|
+| `CLERK_PUBLISHABLE_KEY` | Public Clerk instance key |
+| `CLERK_SECRET_KEY` | Server-side Clerk API access |
+| `CLERK_JWT_PUBLIC_KEY` | Worker-side RS256 verification |
+| `CLERK_AUTHORIZED_PARTIES` | Comma-separated exact allowed origins; no wildcards |
+| `CLERK_ISSUER` | Optional exact issuer pin |
 
-## Enablement order
+Use development keys and development D1 for Preview. Use production keys and production D1 only for Production.
 
-1. Apply migrations locally and verify 0006 and 0007 tables/indexes.
-2. Configure the Clerk development instance and Google social connection.
-3. Set all three required Clerk values plus authorized parties.
-4. Test sign-up with email verification, Google sign-in, logout, expired session, unverified email rejection, duplicate email linking and workspace isolation.
-5. Confirm legacy password users can still sign in during transition and linked identities cannot collide.
-6. Only after tests pass, configure production Clerk keys and production authorized parties.
+## Database migration and rollout order
 
-## Security notes
+1. Apply migrations `0006`, `0007`, `0008`, and `0009` to the intended test D1 database.
+2. Configure the Clerk development instance with Google as the only enabled authentication method.
+3. Set development Clerk keys and exact preview origins in the Preview environment.
+4. Test Google sign-up, repeat Google sign-in, logout, expired sessions, disabled users, verified-email requirement, existing-account linking, and workspace ownership.
+5. Confirm a new account has `plan_tier=free` and `plan_status=active`.
+6. Confirm email/password endpoints return HTTP 410 and no frontend email/password form is rendered.
+7. Only after Preview tests pass, apply migrations to Production, configure production Clerk keys, and deploy the verified build.
 
-- The Clerk public key is used only for signature verification; the secret key is used only to retrieve the verified Clerk profile at first login.
-- OLTAVYN rejects tokens unless RS256 signature, expiry, nbf (when present), sub, azp, and configured issuer checks pass.
-- azp must exactly match one of CLERK_AUTHORIZED_PARTIES. Never use a wildcard origin.
-- Email-based linking is allowed only when Clerk confirms the primary email as verified.
-- Account deletion, data export, support and privacy-policy handling must include the Clerk identity mapping.
-- This integration has not been deployed or verified against a live Clerk instance. Complete the checklist before production use.
+## Security and compatibility
+
+- OLTAVYN verifies Clerk JWT RS256 signature, expiry, optional `nbf`, `sub`, `azp`, and optional exact issuer.
+- The Clerk secret key and JWT public key never reach the browser.
+- Existing password-based accounts can transition by signing in with Google using the same verified primary email. OLTAVYN links the Google identity to the existing internal user ID, preserving workspace ownership.
+- Old local password sessions are no longer accepted by protected API routes. Customers must sign in with Google.
+- The application server remains authoritative for account status, workspace ownership, and admin authorization.
+- Google provider activation and Cloudflare secrets are external dashboard settings; committing application code does not activate those settings automatically.
+- No production deployment or live Google OAuth verification is implied by this documentation.
