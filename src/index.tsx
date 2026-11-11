@@ -6,7 +6,12 @@ import { api } from './routes/domain'
 import { affiliateApi } from './routes/affiliate'
 import commercialApi, { duitkuWebhook } from './routes/commercial'
 const app = new Hono<AppEnv>()
-app.use('*', secureHeaders({contentSecurityPolicy:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'",'https://fonts.googleapis.com'],fontSrc:["'self'",'https://fonts.gstatic.com'],imgSrc:["'self'",'data:','https:'],connectSrc:["'self'"],frameAncestors:["'none'"],formAction:["'self'"],baseUri:["'self'"]},referrerPolicy:'strict-origin-when-cross-origin'}))
+app.use('*', async(c,next)=>{
+  let clerkOrigin=''
+  try { const key=c.env.CLERK_PUBLISHABLE_KEY; const part=key?.split('_')[2]; if(part) clerkOrigin='https://'+atob(part).slice(0,-1) } catch {}
+  const policy={defaultSrc:["'self'"],scriptSrc:["'self'",...(clerkOrigin?[clerkOrigin]:[])],styleSrc:["'self'","'unsafe-inline'",'https://fonts.googleapis.com'],fontSrc:["'self'",'https://fonts.gstatic.com',...(clerkOrigin?[clerkOrigin]:[])],imgSrc:["'self'",'data:','https:'],connectSrc:["'self'",...(clerkOrigin?[clerkOrigin]:[]),'https://api.clerk.com'],frameSrc:["'self'",...(clerkOrigin?[clerkOrigin]:[]),'https://accounts.google.com'],frameAncestors:["'none'"],formAction:["'self'"],baseUri:["'self'"]}
+  return secureHeaders({contentSecurityPolicy:policy,referrerPolicy:'strict-origin-when-cross-origin'})(c,next)
+})
 app.use('/api/*',async(c,next)=>{await next();c.header('Cache-Control','no-store')})
 app.use('/api/*',async(c,next)=>{if(c.req.path==='/api/webhooks/duitku/pop')return next();return csrfGuard(c,next)})
 app.get('/api/health',(c)=>c.json({ok:true,service:'oltavyn',version:'0.3.0'}))
