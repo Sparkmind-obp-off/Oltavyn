@@ -37,3 +37,13 @@ a{color:#315d9a}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f7f8
 legend{font-weight:600;font-size:13px;padding:0 4px}
 .item{padding:10px 0;border-bottom:1px solid #edf0f3}
 .loading{color:#5f6b7d;font-style:italic}
+
+/* Multi-provider hub */
+#provider-usage .grid{margin-top:8px}
+#provider-usage .item{background:#fafbfc;border:1px solid #edf0f3;border-radius:10px;padding:10px}
+[data-panel="providers"] .cols{align-items:start}
+[data-panel="providers"] .card h3{margin-top:2px}
+[data-panel="providers"] form .check{display:flex;align-items:flex-start;gap:9px;font-size:13px;line-height:1.45;margin:12px 0}
+[data-panel="providers"] form .check input{width:auto;min-width:16px;margin-top:2px}
+[data-panel="providers"] pre{min-height:72px}
+@media(max-width:760px){[data-panel="providers"] .cols{grid-template-columns:1fr}}
