@@ -85,7 +85,7 @@ function formData(form) {
 const compact = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== '' && v !== undefined))
 
 // ---------- State & routing ----------
-const state = { user: undefined, workspaces: [], wsId: localStorage.getItem('olt_ws') || null }
+const state = { user: undefined, workspaces: [], wsId: localStorage.getItem('olt_ws') || null }\nlet clerkInstance = null\nlet clerkConfig = null\nlet clerkAuthMounted = null
 const ws = () => state.workspaces.find((w) => w.id === state.wsId)
 const NAV = [
   ['overview', 'Ikhtisar', '◎'], ['research', 'Riset', '1'], ['opportunities', 'Peluang', '2'],
@@ -99,8 +99,262 @@ function route() {
 const go = (hash) => { location.hash = hash }
 window.addEventListener('hashchange', () => render())
 
+async function loadClerkScripts(config) {
+  if (!config?.clerk_enabled || !config.publishable_key) return
+  const encoded=config.publishable_key.split('_')[2]
+  if(!encoded) throw new Error('Clerk Publishable Key tidak valid.')
+  const domain=atob(encoded).slice(0,-1)
+  if(!/^[a-zA-Z0-9.-]+$/.test(domain)) throw new Error('Domain Frontend API Clerk tidak valid.')
+  const loadScript=(src,attrs={})=>new Promise((resolve,reject)=>{
+    const script=document.createElement('script');script.src=src;script.async=true;script.crossOrigin='anonymous'
+    Object.entries(attrs).forEach(([k,v])=>script.setAttribute(k,v))
+    script.onload=resolve;script.onerror=()=>reject(new Error('Gagal memuat Clerk Authentication.'));document.head.appendChild(script)
+  })
+  await loadScript(`https://${domain}/npm/@clerk/ui@1/dist/ui.browser.js`)
+  await loadScript(`https://${domain}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`,{'data-clerk-publishable-key':config.publishable_key})
+  if(!window.Clerk) throw new Error('Clerk SDK tidak tersedia.')
+  await window.Clerk.load({ui:{ClerkUI:window.__internal_ClerkUICtor}})
+  clerkInstance=window.Clerk
+  clerkInstance.addListener(async resources=>{
+    if(resources?.user){
+      try { const me=await api('GET','/auth/me'); if(me.user){state.user=me.user;await loadWorkspaces();render()} } catch {}
+    } else if(state.user){
+      state.user=null;state.workspaces=[];render()
+    }
+  })
+}
 async function boot() {
-  try { const r = await api('GET', '/auth/me'); state.user = r.user; if (state.user) await loadWorkspaces() } catch { state.user = null }
+  try {
+    clerkConfig=await api('GET','/auth/config')
+    if(clerkConfig.clerk_enabled) await loadClerkScripts(clerkConfig)
+    const r = await api('GET', '/auth/me'); state.user = r.user
+    if (state.user) await loadWorkspaces()
+  } catch { state.user = null }
+  render()
+}
+async function loadWorkspaces() {
+  const r = await api('GET', '/workspaces')
+  state.workspaces = r.workspaces
+  if (!ws()) state.wsId = state.workspaces[0]?.id || null
+  if (state.wsId) localStorage.setItem('olt_ws', state.wsId); else localStorage.removeItem('olt_ws')
+}
+
+// ---------- Render root ----------
+const app = $('#app')
+function render() {
+  if (state.user === undefined) return
+  if (!state.user) return renderAuth()
+  if (!state.workspaces.length) return renderShell(renderFirstWorkspace)
+  const { page, id } = route()
+  const pages = { overview: pageOverview, research: pageResearch, opportunities: pageOpportunities, content: pageContent, experiments: pageExperiments, learning: pageLearning, commercial: pageCommercial, settings: pageSettings }
+  renderShell(pages[page] || pageOverview, id)
+}
+
+function renderShell(pageFn, id) {
+  const { page } = route()
+  app.innerHTML = html`
+  <div class="mobile-top"><strong>OLTAVYN</strong><button class="btn btn-ghost btn-sm" id="menu-btn" aria-expanded="false" aria-controls="sidebar" style="color:#fff;border-color:#3a4870">Menu</button></div>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar" aria-label="Navigasi utama">
+      <div class="brand"><div class="brand-mark" aria-hidden="true"><span></span></div><div><div class="brand-name">OLTAVYN</div><div class="brand-sub">Agentic Content OS</div></div></div>
+      ${state.workspaces.length ? html`<div class="ws-switch"><label for="ws-select">Workspace</label>
+        <select id="ws-select">${state.workspaces.map((w) => html`<option value="${w.id}" ${w.id === state.wsId ? raw('selected') : ''}>${w.name}</option>`)}<option value="__new">+ Workspace baru</option></select></div>` : ''}
+      ${state.workspaces.length ? html`<nav class="nav">${NAV.map(([k, label, step]) => html`<a href="#/${k}" ${page === k ? raw('aria-current="page"') : ''}><span class="step" aria-hidden="true">${step}</span>${label}</a>`)}</nav>` : ''}
+      <div class="sidebar-foot"><div>${state.user.display_name || state.user.email}</div><button class="btn btn-ghost btn-sm" id="logout-btn">Keluar</button></div>
+    </aside>
+    <main class="main" id="main" tabindex="-1"></main>
+  </div>`.s
+  $('#logout-btn').onclick = async () => { if(clerkInstance?.session) await clerkInstance.signOut().catch(()=>{}); await api('POST', '/auth/logout', {}).catch(() => {}); state.user = null; state.workspaces = []; render() }
+  $('#menu-btn').onclick = (e) => { const sb = $('#sidebar'); sb.classList.toggle('open'); e.target.setAttribute('aria-expanded', sb.classList.contains('open')) }
+  const sel = $('#ws-select')
+  if (sel) sel.onchange = () => {
+    if (sel.value === '__new') { openWorkspaceDialog(); sel.value = state.wsId; return }
+    state.wsId = sel.value; localStorage.setItem('olt_ws', state.wsId); go('#/overview'); render()
+  }
+  pageFn($('#main'), id)
+}
+
+// ---------- Auth ----------
+function renderAuth(mode = 'login', err = null) {
+  if(clerkInstance && clerkAuthMounted){
+    try { clerkInstance.unmountSignIn(clerkAuthMounted); clerkInstance.unmountSignUp(clerkAuthMounted) } catch {}
+    clerkAuthMounted=null
+  }
+  app.innerHTML = html`
+  <div class="auth-wrap">
+    <section class="auth-hero">
+      <div class="brand" style="padding:0;margin-bottom:28px"><div class="brand-mark" aria-hidden="true"><span></span></div><div><div class="brand-name">OLTAVYN</div><div class="brand-sub">Agentic Affiliate OS</div></div></div>
+      <h1>Bangun sistem affiliate dari riset sampai hasil.</h1>
+      <p>Satu ruang kerja untuk menilai produk, memahami audiens, menyusun konten, dan belajar dari performa yang benar-benar tercatat.</p>
+      <ol><li>Temukan produk dan peluang yang layak diuji</li><li>Susun strategi, skrip, dan kalender konten</li><li>Kelola semua kanal dan eksperimen dalam satu workspace</li><li>Gunakan Agent untuk membantu pekerjaan berulang</li></ol>
+      <div class="auth-proof"><span>Workspace pribadi</span><span>Data milik Anda</span><span>Persetujuan sebelum aksi eksternal</span></div>
+    </section>
+    <section class="auth-panel">
+      <div class="card auth-card">
+        <div class="tabs" role="tablist">
+          <button role="tab" aria-selected="${mode === 'login'}" data-mode="login">Masuk</button>
+          <button role="tab" aria-selected="${mode === 'register'}" data-mode="register">Buat akun</button>
+        </div>
+        ${errorBox(err)}
+        ${clerkInstance ? html`<div id="clerk-auth" class="clerk-auth-slot"></div><p class="small muted auth-provider-note">Masuk dan pendaftaran diamankan oleh Clerk. Google tersedia setelah koneksi Google diaktifkan pada Clerk Dashboard.</p>` : html`<div class="alert alert-info">Autentikasi Clerk belum dikonfigurasi. Mode email dan kata sandi sementara masih aktif.</div>
+        <form id="auth-form" novalidate>
+          ${mode === 'register' ? html`<div class="field"><label class="l" for="display_name">Nama tampilan</label><input id="display_name" name="display_name" type="text" maxlength="80" autocomplete="name"></div>` : ''}
+          <div class="field"><label class="l" for="email">Email</label><input id="email" name="email" type="email" required autocomplete="email"></div>
+          <div class="field"><label class="l" for="password">Kata sandi</label><input id="password" name="password" type="password" required minlength="10" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}">
+            ${mode === 'register' ? html`<div class="hint">Minimal 10 karakter.</div>` : ''}</div>
+          <button class="btn btn-primary" style="width:100%" type="submit">${mode === 'login' ? 'Masuk' : 'Buat akun'}</button>
+        </form>`}
+        <p class="small muted" style="margin-top:14px">OLTAVYN tidak pernah meminta kata sandi, cookie, atau OTP akun media sosial/marketplace Anda.</p>
+      </div>
+    </section>
+  </div>`.s
+  $$('[data-mode]').forEach((b) => (b.onclick = () => renderAuth(b.dataset.mode)))
+  if(clerkInstance){
+    const slot=$('#clerk-auth');clerkAuthMounted=slot
+    if(mode==='register') clerkInstance.mountSignUp(slot,{fallbackRedirectUrl:'/'})
+    else clerkInstance.mountSignIn(slot,{fallbackRedirectUrl:'/'})
+    return
+  }
+  $('#auth-form').onsubmit = async (e) => {
+    e.preventDefault()
+    const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true
+    try {
+      const r = await api('POST', `/auth/${mode}`, compact(formData(e.target)))
+      state.user = r.user; await loadWorkspaces(); go('#/overview'); render()
+    } catch (er) { renderAuth(mode, er) }
+  }
+}/ OLTAVYN frontend — vanilla JS SPA. All dynamic text is escaped via the `html` tag.
+// The server is authoritative for auth/authorization; the UI only reflects server state.
+
+// ---------- Safe templating ----------
+class Raw { constructor(s) { this.s = s } }
+const raw = (s) => new Raw(s)
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+function html(strings, ...vals) {
+  let out = ''
+  strings.forEach((s, i) => {
+    out += s
+    if (i < vals.length) {
+      const v = vals[i]
+      if (v instanceof Raw) out += v.s
+      else if (Array.isArray(v)) out += v.map((x) => (x instanceof Raw ? x.s : esc(x))).join('')
+      else if (v === false || v === null || v === undefined) out += ''
+      else out += esc(v)
+    }
+  })
+  return raw(out)
+}
+const $ = (sel, root = document) => root.querySelector(sel)
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)]
+
+// ---------- API ----------
+class HttpError extends Error { constructor(status, body) { super(body?.error?.message || `HTTP ${status}`); this.status = status; this.body = body } }
+async function api(method, path, data) {
+  const opt = { method, headers: {}, credentials: 'same-origin' }
+  if (data !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(data) }
+  let res
+  try { res = await fetch(`/api${path}`, opt) } catch { throw new HttpError(0, { error: { message: 'Koneksi gagal. Periksa jaringan Anda.' } }) }
+  const body = await res.json().catch(() => null)
+  if (res.status === 401 && !path.startsWith('/auth/')) { state.user = null; render(); throw new HttpError(401, body) }
+  if (!res.ok) throw new HttpError(res.status, body)
+  return body
+}
+
+// ---------- Formatting ----------
+const fmtDate = (iso) => iso ? new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '—'
+const fmtDay = (iso) => iso ? new Date(iso).toLocaleDateString('id-ID', { dateStyle: 'medium' }) : '—'
+const LABELS = {
+  source_type: { web_page: 'Halaman web', platform_observation: 'Observasi platform', user_interview: 'Wawancara pengguna', export_file: 'File ekspor', other: 'Lainnya' },
+  collection_method: { manual_entry: 'Input manual', user_export: 'Ekspor pengguna', official_api: 'API resmi' },
+  opp_status: { candidate: 'Kandidat', accepted: 'Diterima', rejected: 'Ditolak' },
+  asset_status: { draft: 'Draf', in_review: 'Ditinjau', approved: 'Disetujui', rejected: 'Ditolak' },
+  exp_status: { planned: 'Direncanakan', published: 'Terbit', not_published: 'Sengaja tidak diterbitkan' },
+  value_status: { observed: 'Teramati', not_yet_available: 'Belum tersedia', not_collected: 'Tidak dikumpulkan', failed: 'Gagal diambil' },
+  origin: { manual: 'Manual', imported: 'Impor', api: 'API' },
+  relationship: { supports: 'Mendukung', challenges: 'Menantang', context: 'Konteks' },
+  format: { brief: 'Brief', short_video_script: 'Naskah video pendek', caption: 'Caption', article: 'Artikel', thread: 'Thread', other: 'Lainnya' },
+  claim_status: { supported: 'Didukung bukti', unsupported: 'Tanpa bukti', needs_verification: 'Perlu verifikasi' },
+}
+const badgeTone = {
+  candidate: 'b-neutral', accepted: 'b-ok', rejected: 'b-bad', draft: 'b-neutral', in_review: 'b-info', approved: 'b-ok',
+  planned: 'b-neutral', published: 'b-ok', not_published: 'b-warn', observed: 'b-ok', not_yet_available: 'b-warn', not_collected: 'b-neutral', failed: 'b-bad',
+  supported: 'b-ok', unsupported: 'b-bad', needs_verification: 'b-warn', supports: 'b-ok', challenges: 'b-bad', context: 'b-neutral',
+}
+const badge = (group, v) => html`<span class="badge ${badgeTone[v] || 'b-neutral'}">${LABELS[group]?.[v] ?? v}</span>`
+
+function toast(msg) {
+  $$('.toast').forEach((x) => x.remove())
+  const t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); t.textContent = msg
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3200)
+}
+function errorBox(err) {
+  if (!err) return ''
+  const details = err.body?.error?.details
+  const list = details && typeof details === 'object' ? Object.entries(details).map(([k, v]) => html`<li><strong>${k}</strong>: ${typeof v === 'string' ? v : JSON.stringify(v)}</li>`) : []
+  return html`<div class="alert alert-error" role="alert">${err.message}${list.length ? html`<ul>${list}</ul>` : ''}</div>`
+}
+const skeleton = (n = 3) => raw(Array.from({ length: n }, () => '<div class="skeleton"></div>').join(''))
+
+function formData(form) {
+  const o = {}
+  for (const el of form.elements) {
+    if (!el.name || el.disabled) continue
+    if (el.type === 'checkbox') continue
+    let v = el.value
+    if (el.type === 'datetime-local' || el.type === 'date') v = v ? new Date(v).toISOString() : ''
+    if (el.type === 'number') v = v === '' ? '' : Number(v)
+    o[el.name] = v
+  }
+  return o
+}
+const compact = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== '' && v !== undefined))
+
+// ---------- State & routing ----------
+const state = { user: undefined, workspaces: [], wsId: localStorage.getItem('olt_ws') || null }\nlet clerkInstance = null\nlet clerkConfig = null\nlet clerkAuthMounted = null
+const ws = () => state.workspaces.find((w) => w.id === state.wsId)
+const NAV = [
+  ['overview', 'Ikhtisar', '◎'], ['research', 'Riset', '1'], ['opportunities', 'Peluang', '2'],
+  ['content', 'Content Studio', '3'], ['experiments', 'Eksperimen', '4'], ['learning', 'Pembelajaran', '5'], ['commercial', 'Paket & Pesanan', 'Rp'], ['settings', 'Pengaturan', '⚙'],
+]
+function route() {
+  const path = location.hash.replace(/^#\/?/, '').split('?')[0]
+  const [page = 'overview', id = null] = path.split('/')
+  return { page: page || 'overview', id }
+}
+const go = (hash) => { location.hash = hash }
+window.addEventListener('hashchange', () => render())
+
+async function loadClerkScripts(config) {
+  if (!config?.clerk_enabled || !config.publishable_key) return
+  const encoded=config.publishable_key.split('_')[2]
+  if(!encoded) throw new Error('Clerk Publishable Key tidak valid.')
+  const domain=atob(encoded).slice(0,-1)
+  if(!/^[a-zA-Z0-9.-]+$/.test(domain)) throw new Error('Domain Frontend API Clerk tidak valid.')
+  const loadScript=(src,attrs={})=>new Promise((resolve,reject)=>{
+    const script=document.createElement('script');script.src=src;script.async=true;script.crossOrigin='anonymous'
+    Object.entries(attrs).forEach(([k,v])=>script.setAttribute(k,v))
+    script.onload=resolve;script.onerror=()=>reject(new Error('Gagal memuat Clerk Authentication.'));document.head.appendChild(script)
+  })
+  await loadScript(`https://${domain}/npm/@clerk/ui@1/dist/ui.browser.js`)
+  await loadScript(`https://${domain}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`,{'data-clerk-publishable-key':config.publishable_key})
+  if(!window.Clerk) throw new Error('Clerk SDK tidak tersedia.')
+  await window.Clerk.load({ui:{ClerkUI:window.__internal_ClerkUICtor}})
+  clerkInstance=window.Clerk
+  clerkInstance.addListener(async resources=>{
+    if(resources?.user){
+      try { const me=await api('GET','/auth/me'); if(me.user){state.user=me.user;await loadWorkspaces();render()} } catch {}
+    } else if(state.user){
+      state.user=null;state.workspaces=[];render()
+    }
+  })
+}
+async function boot() {
+  try {
+    clerkConfig=await api('GET','/auth/config')
+    if(clerkConfig.clerk_enabled) await loadClerkScripts(clerkConfig)
+    const r = await api('GET', '/auth/me'); state.user = r.user
+    if (state.user) await loadWorkspaces()
+  } catch { state.user = null }
   render()
 }
 async function loadWorkspaces() {
