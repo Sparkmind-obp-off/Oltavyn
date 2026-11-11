@@ -1,18 +1,9 @@
 import { Hono, type MiddlewareHandler } from 'hono'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
-import { ApiError, AppEnv, PBKDF2_ITERATIONS, audit, hashPassword, newId, nowIso, randomToken, rateLimit, safeEqual, sha256Hex, validate } from '../lib/core'
+import { ApiError, AppEnv, audit, newId, nowIso, sha256Hex } from '../lib/core'
 
 const COOKIE = 'olt_session'
 const SESSION_DAYS = 14
-
-async function startSession(c: any, userId: string) {
-  const token = randomToken(32)
-  const expires = new Date(Date.now() + SESSION_DAYS * 86400_000)
-  await c.env.DB.prepare('INSERT INTO sessions (id, user_id, created_at, expires_at) VALUES (?,?,?,?)')
-    .bind(await sha256Hex(token), userId, nowIso(), expires.toISOString()).run()
-  const secure = new URL(c.req.url).protocol === 'https:'
-  setCookie(c, COOKIE, token, { httpOnly: true, secure, sameSite: 'Strict', path: '/', expires })
-}
 
 const clientKey = (c: any) => c.req.header('cf-connecting-ip') || 'local'
 
@@ -91,7 +82,10 @@ export const csrfGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   await next()
 }
 
-export const auth = new Hono<AppEnv>()\n\nauth.get('/config', c => c.json({ clerk_enabled: !!(c.env.CLERK_PUBLISHABLE_KEY && c.env.CLERK_JWT_PUBLIC_KEY && c.env.CLERK_SECRET_KEY), publishable_key: c.env.CLERK_PUBLISHABLE_KEY || null }))
+export const auth = new Hono<AppEnv>()\n\nauth.get('/config', c => c.json({ auth_mode: 'google_only', clerk_enabled: !!(c.env.CLERK_PUBLISHABLE_KEY && c.env.CLERK_JWT_PUBLIC_KEY && c.env.CLERK_SECRET_KEY), publishable_key: c.env.CLERK_PUBLISHABLE_KEY || null }))
+
+auth.post('/register', async () => { throw new ApiError(410, 'google_only_auth', 'Pendaftaran email dan kata sandi telah dinonaktifkan. Gunakan Google.') })
+auth.post('/login', async () => { throw new ApiError(410, 'google_only_auth', 'Login email dan kata sandi telah dinonaktifkan. Gunakan Google.') })
 
 auth.post('/logout', async (c) => {
   const token = getCookie(c, COOKIE)
