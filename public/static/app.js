@@ -193,7 +193,7 @@ async function pagePublicCatalog() {
     const d=await api('GET','/public/catalog')
     const money=n=>new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n||0))
     $('[data-public-catalog]').innerHTML=d.catalog.map(item=>html`<article class="card package-card"><div class="package-kicker">SERVICE PACKAGE</div><h2>${item.name}</h2><p class="muted">${item.description}</p><div class="package-price">${money(item.price_idr)} <small>${item.billing_type==='monthly'?'/ bulan':'/ sekali'}</small></div><h3>Yang Anda dapatkan</h3><ul>${item.deliverables.map(x=>html`<li>${x}</li>`)}</ul><details><summary>Lihat batasan layanan</summary><ul>${item.exclusions.map(x=>html`<li>${x}</li>`)}</ul></details><button class="btn btn-primary" data-public-buy style="width:100%;margin-top:14px">Daftar untuk memilih paket</button></article>`).map(x=>x.s).join('')
-    $('[data-public-buy]').forEach(b=>b.onclick=()=>renderAuth())
+    $('[data-public-buy]').forEach(b=>b.onclick=()=>renderAuth('register'))
     if(!d.checkout_enabled) $('[data-public-catalog]').insertAdjacentHTML('beforebegin','<div class="alert alert-info">Katalog tersedia untuk ditinjau. Pemesanan dan pembayaran akan dibuka setelah konfigurasi dan pengujian selesai.</div>')
   }catch(e){$('[data-public-catalog]').innerHTML=errorBox(e).s}
 }
