@@ -41,12 +41,12 @@ Confirmed application stack:
 Changes added to `main`:
 - `migrations/0005_agent_runtime_foundation.sql`: durable `agent_runs`, `agent_run_steps`, and `agent_approval_requests` tables with workspace/user foreign keys, bounded states, indexes and idempotency uniqueness.
 - `src/lib/agentRuntime.ts`: typed tool contracts, permission classes R0/R1/W1/W2/P1/P2, input validation, allowlist lookup and policy enforcement.
-- `src/routes/affiliate.ts`: workspace-authorized tool discovery and run/step read endpoints.
+- `src/routes/affiliate.ts`: workspace-authorized tool discovery, bounded R0 plan execution, run/step read endpoints and D1 execution logging.
 - `tests/providers.test.ts`: unit coverage for registry, disabled write/paid/publish tools and strict input validation.
-- `tests/affiliate-smoke.mjs`: workspace-isolation coverage for tool discovery.
+- `tests/affiliate-smoke.mjs`: workspace-isolation coverage for tool discovery, R0 execution, run/step logging, idempotency and disabled publish refusal.
 
 ### Phase 1 safety boundary
-Only the bounded read-only workspace summary, product, channel and evidence tools are enabled in the registry. Draft writes, paid Actor execution and publishing are explicitly disabled because their approval/execution lifecycle is not yet complete. This is intentional; do not treat registry discovery as proof that an executor exists.
+Only bounded read-only workspace summary, product list, channel list and evidence list tools are enabled. These R0 tools can now be invoked through a bounded run API; each run and step is recorded in D1. The API accepts a caller-supplied plan, not arbitrary model-generated execution. Draft writes, paid Actor execution and publishing remain explicitly disabled because their approval/execution lifecycle is not yet complete.
 
 ## Validation status
 
