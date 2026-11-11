@@ -31,19 +31,18 @@ async function verifyAccessToken(token: string, teamDomain: string, audiencesAll
   try { header = decodePart(parts[0]); claims = decodePart(parts[1]) }
   catch { throw new ApiError(403, 'access_invalid', 'Token Cloudflare Access tidak valid.') }
   if (header.alg !== 'RS256' || !header.kid) throw new ApiError(403, 'access_invalid', 'Algoritma token Cloudflare Access tidak diizinkan.')
-  const jwk = (await loadKeys(teamDomain)).find(key => key.kid === header.kid && key.alg === 'RS256' && key.use === 'sig')
+  let jwk = (await loadKeys(teamDomain)).find(key => key.kid === header.kid && key.alg === 'RS256' && key.use === 'sig')
   if (!jwk) {
     keyCache.delete(teamDomain)
-    const refreshed = (await loadKeys(teamDomain)).find(key => key.kid === header.kid && key.alg === 'RS256' && key.use === 'sig')
-    if (!refreshed) throw new ApiError(403, 'access_invalid', 'Kunci token Cloudflare Access tidak dikenal.')
+    jwk = (await loadKeys(teamDomain)).find(key => key.kid === header.kid && key.alg === 'RS256' && key.use === 'sig')
   }
-  const selected = jwk || (await loadKeys(teamDomain)).find(key => key.kid === header.kid)!
-  const key = await crypto.subtle.importKey('jwk', selected, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify'])
+  if (!jwk) throw new ApiError(403, 'access_invalid', 'Kunci token Cloudflare Access tidak dikenal.')
+  const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify'])
   const valid = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key,
     Uint8Array.from(atob(parts[2].replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(parts[2].length / 4) * 4, '=')), c => c.charCodeAt(0)),
     new TextEncoder().encode(parts[0] + '.' + parts[1]))
   const now = Math.floor(Date.now() / 1000)
-  const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud]
+  const audiences = (Array.isArray(claims.aud) ? claims.aud : [claims.aud]).filter((value): value is string => typeof value === 'string')
   if (!valid || claims.iss !== 'https://' + teamDomain || !audiences.some(audience => audiencesAllowed.includes(audience)) ||
       !claims.sub || !claims.exp || claims.exp <= now || (claims.nbf !== undefined && claims.nbf > now + 30)) {
     throw new ApiError(403, 'access_invalid', 'Token Cloudflare Access tidak valid, kedaluwarsa, atau bukan untuk aplikasi admin ini.')
