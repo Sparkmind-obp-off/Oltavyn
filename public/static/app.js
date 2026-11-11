@@ -197,7 +197,7 @@ async function pagePublicCatalog() {
 }
 
 // ---------- Auth ----------
-function renderAuth(mode = 'login', err = null) {
+function renderAuth(_mode = 'login', err = null) {
   if(clerkInstance && clerkAuthMounted){
     try { clerkInstance.unmountSignIn(clerkAuthMounted); clerkInstance.unmountSignUp(clerkAuthMounted) } catch {}
     clerkAuthMounted=null
@@ -208,27 +208,22 @@ function renderAuth(mode = 'login', err = null) {
       <div class="brand" style="padding:0;margin-bottom:28px"><div class="brand-mark" aria-hidden="true"><span></span></div><div><div class="brand-name">OLTAVYN</div><div class="brand-sub">Agentic Affiliate OS</div></div></div>
       <h1>Bangun sistem affiliate dari riset sampai hasil.</h1>
       <p>Satu ruang kerja untuk menilai produk, memahami audiens, menyusun konten, dan belajar dari performa yang benar-benar tercatat.</p>
-      <ol><li>Mulai dengan akun Google</li><li>Dapatkan workspace Free tanpa kartu pembayaran</li><li>Tingkatkan layanan hanya ketika Anda membutuhkannya</li></ol>
-      <div class="auth-proof"><span>Workspace pribadi</span><span>Data milik Anda</span><span>Tanpa password OLTAVYN</span></div><p style="margin-top:20px"><a href="#/pricing" style="color:#fff">Lihat paket layanan OLTAVYN →</a></p>
+      <ol><li>Temukan produk dan peluang yang layak diuji</li><li>Susun strategi, skrip, dan kalender konten</li><li>Kelola semua kanal dan eksperimen dalam satu workspace</li><li>Gunakan Agent untuk membantu pekerjaan berulang</li></ol>
+      <div class="auth-proof"><span>Workspace pribadi</span><span>Paket Free tersedia</span><span>Persetujuan sebelum aksi eksternal</span></div><p style="margin-top:20px"><a href="#/pricing" style="color:#fff">Lihat paket layanan OLTAVYN →</a></p>
     </section>
     <section class="auth-panel">
       <div class="card auth-card">
-        <div class="tabs" role="tablist">
-          <button role="tab" aria-selected="${mode === 'login'}" data-mode="login">Masuk</button>
-          <button role="tab" aria-selected="${mode === 'register'}" data-mode="register">Daftar</button>
-        </div>
+        <h2>Masuk atau buat akun</h2>
+        <p class="muted">Gunakan akun Google. Pendaftaran akun baru dilakukan otomatis saat pertama kali masuk.</p>
         ${errorBox(err)}
-        ${clerkInstance ? html`<div id="clerk-auth" class="clerk-auth-slot"></div><p class="small muted auth-provider-note">Gunakan akun Google untuk mendaftar atau masuk. Akun baru otomatis mendapatkan Free plan. OLTAVYN tidak meminta email atau password secara manual.</p>` : html`<div class="alert alert-info">Login Google belum aktif. Administrator perlu mengaktifkan Google Social Connection pada Clerk dan mengonfigurasi kunci Clerk di Cloudflare. Login email/password telah dinonaktifkan.</div>`}
-        <p class="small muted" style="margin-top:14px">Dengan melanjutkan, Anda menyetujui Ketentuan Layanan dan Kebijakan Privasi OLTAVYN.</p>
+        ${clerkInstance ? html`<div id="clerk-auth" class="clerk-auth-slot"></div><p class="small muted auth-provider-note">OLTAVYN hanya menerima autentikasi melalui Google. Email dan kata sandi bukan metode login.</p>` : html`<div class="alert alert-error">Login Google belum tersedia. Administrator perlu mengaktifkan Google Social Connection di Clerk dan mengonfigurasi kunci autentikasi pada Cloudflare.</div>`}
+        <p class="small muted" style="margin-top:14px">Setelah berhasil masuk, Anda dapat langsung menggunakan paket Free tanpa kartu pembayaran.</p>
       </div>
     </section>
   </div>`.s
-  $$('[data-mode]').forEach((b) => (b.onclick = () => renderAuth(b.dataset.mode)))
   if(clerkInstance){
     const slot=$('#clerk-auth');clerkAuthMounted=slot
-    const appearance={elements:{card:'clerk-card',footer:'clerk-footer'}}
-    if(mode==='register') clerkInstance.mountSignUp(slot,{fallbackRedirectUrl:'/',appearance})
-    else clerkInstance.mountSignIn(slot,{fallbackRedirectUrl:'/',appearance})
+    clerkInstance.mountSignIn(slot,{fallbackRedirectUrl:'/',signUpUrl:'/'})
   }
 }
 
