@@ -314,6 +314,7 @@ affiliateApi.post('/agent/chat', async (c) => {
   const ws = await workspace(c, text(d.workspace_id, 100))
   const message = text(d.message, 6000)
   if (!message) throw new ApiError(400, 'message_required', 'Tulis pesan terlebih dahulu.')
+  await rateLimit(c.env.DB, `agent-chat:${uid(c)}`, 40, 3600)
   let conversationId = text(d.conversation_id, 100)
   if (conversationId) {
     const owned = await c.env.DB.prepare('SELECT id FROM agent_conversations WHERE id=? AND workspace_id=? AND user_id=?').bind(conversationId, ws.id, uid(c)).first<any>()
@@ -326,7 +327,6 @@ affiliateApi.post('/agent/chat', async (c) => {
   const userMessageId = newId('agm'), userTime = nowIso()
   await c.env.DB.prepare("INSERT INTO agent_messages (id,conversation_id,role,content,metadata_json,created_at) VALUES (?,?,'user',?,'{}',?)").bind(userMessageId, conversationId, message, userTime).run()
 
-  await rateLimit(c.env.DB, `agent-chat:${uid(c)}`, 40, 3600)
   const [{ results: history }, summary, { results: products }, { results: channels }, { results: evidence }, { results: opportunities }, { results: assets }, { results: experiments }, { results: scorecards }] = await Promise.all([
     c.env.DB.prepare("SELECT role,content FROM agent_messages WHERE conversation_id=? ORDER BY created_at DESC LIMIT 12").bind(conversationId).all(),
     c.env.DB.prepare("SELECT COUNT(*) AS products, SUM(CASE WHEN lifecycle_status IN ('shortlisted','selected') THEN 1 ELSE 0 END) AS shortlisted FROM affiliate_products WHERE workspace_id=? AND lifecycle_status<>'archived'").bind(ws.id).first<any>(),
