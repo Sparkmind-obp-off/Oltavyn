@@ -43,7 +43,7 @@ A separate empty preview database has been created:
 - UUID: `32386f39-80f9-40a1-adb7-a3970a168916`
 - Region: APAC
 
-The feature branch Wrangler config uses this database as its default/preview D1 binding. The production environment retains the legacy ID until the owner decides whether it can be replaced. Do not apply production migrations.
+The feature branch Wrangler config uses this database as its default/preview D1 binding. The production environment retains the legacy ID until the owner decides whether it can be replaced. A request to create a replacement `oltavyn-production` database was rejected by Cloudflare because the account limit is 10 D1 databases and all 10 slots are now occupied. Do not delete another project's database without explicit approval. Do not apply production migrations.
 
 Next:
 1. Verify the preview binding in the Pages project after a preview deployment.
