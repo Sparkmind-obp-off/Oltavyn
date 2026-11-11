@@ -17,8 +17,8 @@ async function hmacHex(secret: string, value: string) {
   const key = await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign'])
   return hex(await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(value)))
 }
-function duitkuConfig(env: DuitkuEnv) {
-  if (env.DUITKU_CHECKOUT_ENABLED !== 'true') throw new ApiError(503,'checkout_disabled','Checkout Duitku belum diaktifkan oleh administrator.')
+function duitkuConfig(env: DuitkuEnv, requireEnabled = true) {
+  if (requireEnabled && env.DUITKU_CHECKOUT_ENABLED !== 'true') throw new ApiError(503,'checkout_disabled','Checkout Duitku belum diaktifkan oleh administrator.')
   if (!env.DUITKU_MERCHANT_CODE || !env.DUITKU_API_KEY) throw new ApiError(503,'duitku_not_configured','Duitku belum dikonfigurasi di Cloudflare Secrets.')
   const base = (env.DUITKU_BASE_URL || 'https://api-sandbox.duitku.com').replace(/\/$/,'')
   if (!['https://api-sandbox.duitku.com','https://api-prod.duitku.com'].includes(base)) throw new ApiError(503,'duitku_base_url_invalid','Base URL Duitku tidak diizinkan.')
@@ -113,7 +113,7 @@ api.post('/orders/:id/checkout', async c => {
 
 // Duitku server callback. Never grant access based on browser return/JS callbacks.
 export const duitkuWebhook = async (c: any) => {
-  const cfg = duitkuConfig(c.env as unknown as DuitkuEnv)
+  const cfg = duitkuConfig(c.env as unknown as DuitkuEnv, false)
   const form = await c.req.parseBody()
   const merchantCode = clean(form.merchantCode,80), amount = clean(form.amount,30), merchantOrderId = clean(form.merchantOrderId,120)
   const resultCode = clean(form.resultCode,20), reference = clean(form.reference,120), signature = clean(form.signature,256)
