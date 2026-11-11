@@ -179,7 +179,7 @@ async function loadAgentConversations() {
   try {
     const d = await api('GET', '/affiliate/agent/conversations?workspace_id=' + encodeURIComponent(state.ws))
     el.innerHTML = d.conversations.length ? d.conversations.map((x) => '<button class="agent-conversation ' + (x.id === state.agentConversationId ? 'active' : '') + '" data-agent-conversation="' + esc(x.id) + '">' + esc(x.title) + '<small>' + esc(String(x.updated_at || '').slice(0, 16).replace('T', ' ')) + '</small></button>').join('') : '<p class="small muted">Belum ada percakapan.</p>'
-    $('[data-agent-conversation]', el).forEach((b) => { b.onclick = () => withBusy(null, async () => { state.agentConversationId = b.dataset.agentConversation; await loadAgentMessages(); await loadAgentConversations() }) })
+    $$('[data-agent-conversation]', el).forEach((b) => { b.onclick = () => withBusy(null, async () => { state.agentConversationId = b.dataset.agentConversation; await loadAgentMessages(); await loadAgentConversations() }) })
   } catch (e) { el.textContent = e.message }
 }
 async function loadAgentMessages() {
@@ -358,5 +358,3 @@ $('#channel-form').onsubmit = (e) => { e.preventDefault(); withBusy(e.submitter,
 $('#groq-form').onsubmit = (e) => { e.preventDefault(); const out = $('#groq-result'); out.textContent = 'Membuat draf…'; withBusy(e.submitter, async () => { try { const d = await api('POST', '/affiliate/providers/groq/generate', formValues(e.target)); out.textContent = '[' + d.label + ']\n\n' + (d.text || 'Tidak ada teks.') } catch (err) { out.textContent = err.message } }) }
 $('#tavily-form').onsubmit = (e) => { e.preventDefault(); const out = $('#tavily-result'); out.textContent = 'Mencari…'; withBusy(e.submitter, async () => { try { const d = await api('POST', '/affiliate/providers/tavily/search', formValues(e.target)); out.innerHTML = `<p class="small muted">${esc(d.note)}</p>` + (d.results.length ? d.results.map((x) => `<div class="item"><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer"><strong>${esc(x.title)}</strong></a><p class="small">${esc(x.excerpt)}</p><div class="small muted">Diambil ${esc(x.captured_at.slice(0, 10))}${x.published_date ? ' · terbit ' + esc(x.published_date) : ''} · status: petunjuk belum ditinjau</div></div>`).join('') : '<p>Tidak ada hasil.</p>') } catch (err) { out.textContent = err.message } }) }
 boot()
-
-// agent chat selector patch verification
