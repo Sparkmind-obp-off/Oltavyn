@@ -81,12 +81,14 @@ Provider integrations are optional and remain disabled until credentials are int
 | Groq | `GROQ_API_KEY` | Structured content draft generation | Not configured / not validated |
 | Tavily | `TAVILY_API_KEY` | Search discovery and source leads | Not configured / not validated |
 | Apify | `APIFY_API_TOKEN` | Allowlisted Actor runs | Not configured / not validated; each run needs explicit confirmation |
-| Scrape.ly | `SCRAPELY_TOKEN` | Scraping adapter | Disabled until official endpoint, auth and pricing are verified |
+| Scrape.ly | `SCRAPELY_TOKEN`, `SCRAPELY_BASE_URL`, `SCRAPELY_RUN_PATH` | Scraping/task adapter | Fail-closed until official endpoint, auth, request schema and pricing are verified |
 
 Rules:
 - Never paste credentials into chat, GitHub files, D1, browser code, logs, or screenshots.
 - Configure secrets only through Cloudflare Pages secrets or an untracked local `.dev.vars`.
 - A secret's presence means `configured_unverified`, not `verified`.
+- Scrape.ly must remain `endpoint_unverified` until its official HTTPS base URL and exact run-path template have been reviewed; never assume a vendor API path.
+- `/api/affiliate/providers/usage` reports audited call counts only, not cost, tokens, credits or balances.
 - Run a small read-only credential validation first where supported.
 - Show exact provider/Actor/model, data sent, quota/cost uncertainty, and limits before any billable request.
 - Do not run Actors, batch scraping, or paid requests without explicit per-run approval.
