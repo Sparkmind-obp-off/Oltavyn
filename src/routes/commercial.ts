@@ -151,4 +151,31 @@ export const duitkuWebhook = async (c: any) => {
   return c.json({ok:true})
 }
 
+
+api.get('/orders/:id/work', async c => {
+  const order=await c.env.DB.prepare('SELECT id,status,created_at,updated_at FROM commercial_orders WHERE id=? AND user_id=?').bind(c.req.param('id'),uid(c)).first<any>()
+  if(!order) throw new ApiError(404,'not_found','Pesanan tidak ditemukan.')
+  const job=await c.env.DB.prepare('SELECT id,status,delivery_note,revision_count,revision_limit,created_at,updated_at,completed_at FROM commercial_service_jobs WHERE order_id=?').bind(order.id).first<any>()
+  if(!job) return c.json({order,job:null,deliverables:[],revisions:[]})
+  const [deliverables,revisions]=await Promise.all([
+    c.env.DB.prepare("SELECT id,title,description,file_url,file_type,created_at FROM commercial_deliverables WHERE job_id=? AND visibility='customer' ORDER BY created_at DESC").bind(job.id).all(),
+    c.env.DB.prepare('SELECT id,message,status,admin_note,created_at,updated_at FROM commercial_revision_requests WHERE job_id=? AND user_id=? ORDER BY created_at DESC').bind(job.id,uid(c)).all()
+  ])
+  return c.json({order,job,deliverables:deliverables.results,revisions:revisions.results})
+})
+api.post('/orders/:id/revisions', async c => {
+  const body=await json(c), message=clean(body.message,2000)
+  if(!message) throw new ApiError(400,'validation_failed','Jelaskan revisi yang dibutuhkan.')
+  const order=await c.env.DB.prepare('SELECT id FROM commercial_orders WHERE id=? AND user_id=?').bind(c.req.param('id'),uid(c)).first<any>()
+  if(!order) throw new ApiError(404,'not_found','Pesanan tidak ditemukan.')
+  const job=await c.env.DB.prepare("SELECT * FROM commercial_service_jobs WHERE order_id=? AND status IN ('waiting_customer','review','delivered')").bind(order.id).first<any>()
+  if(!job) throw new ApiError(409,'revision_unavailable','Permintaan revisi hanya tersedia saat pekerjaan menunggu tanggapan, ditinjau, atau telah dikirim.')
+  if(job.revision_count>=job.revision_limit) throw new ApiError(409,'revision_limit_reached','Batas revisi paket ini telah digunakan.')
+  const id=newId('rev'),now=nowIso()
+  await c.env.DB.prepare("INSERT INTO commercial_revision_requests (id,job_id,user_id,message,status,created_at,updated_at) VALUES (?,?,?,?,'open',?,?)").bind(id,job.id,uid(c),message,now,now).run()
+  await c.env.DB.prepare("INSERT INTO commercial_job_events (id,job_id,actor_user_id,event_type,note,created_at) VALUES (?,?,?,'revision_requested',?,?)").bind(newId('jev'),job.id,uid(c),message,now).run()
+  await audit(c.env.DB,{workspace_id:job.workspace_id,actor_user_id:uid(c),action:'commercial.revision.requested',resource_type:'commercial_revision_request',resource_id:id})
+  return c.json({ok:true,id},201)
+})
+
 export default api;
