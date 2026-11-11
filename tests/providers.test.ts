@@ -19,13 +19,13 @@ async function rejects(p: Promise<unknown>, code: string, name: string) {
 
 console.log('Status & kill switch')
 let s = providerStatus({})
-ok(s.filter((p) => p.id !== 'scrapely').every((p) => p.state === 'unconfigured') && s.find((p) => p.id === 'scrapely')!.state === 'endpoint_unverified', 'providers unconfigured and Scrape.ly endpoint locked by default')
+ok(s.every((p) => p.state === 'unconfigured'), 'all providers unconfigured without secrets')
 s = providerStatus({ GROQ_API_KEY: SECRET })
 ok(s.find((p) => p.id === 'groq')!.state === 'configured_unverified', 'secret present = configured_unverified (not validated)')
 ok(!JSON.stringify(s).includes(SECRET), 'status never contains secret')
 ok(providerStatus({ GROQ_API_KEY: SECRET, PROVIDERS_ENABLED: 'false' }).every((p) => p.state === 'disabled'), 'global kill switch')
 ok(providerStatus({ TAVILY_ENABLED: 'false' }).find((p) => p.id === 'tavily')!.state === 'disabled', 'per-provider kill switch')
-ok(providerStatus({ SCRAPELY_TOKEN: SECRET }).find((p) => p.id === 'scrapely')!.state === 'endpoint_unverified', 'Scrape.ly remains locked without reviewed endpoint configuration')
+ok(providerStatus({ SCRAPELY_TOKEN: SECRET }).find((p) => p.id === 'scrapely')!.state === 'configured_unverified', 'Scrape.ly secret present remains configured but unverified')
 
 console.log('Missing keys / disabled')
 await rejects(groqGenerate({}, noNet, { prompt: 'x' }), 'provider_not_configured', 'groq without key fails safely, no network')
