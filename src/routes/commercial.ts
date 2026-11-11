@@ -30,7 +30,7 @@ const uid = (c: any) => c.get('user').id
 
 // Catalog is authenticated for now; price and scope always come from server-side D1.
 api.get('/catalog', async c => {
-  const rows = await c.env.DB.prepare("SELECT sku,name,description,price_idr,currency,billing_type,deliverables_json,exclusions_json FROM commercial_catalog WHERE status='active' ORDER BY sort_order").all()
+  const rows = await c.env.DB.prepare("SELECT sku,name,description,price_idr,billing_type,deliverables_json,exclusions_json FROM commercial_catalog WHERE status='active' ORDER BY sort_order").all()
   return c.json({ catalog: (rows.results as any[]).map(r=>({...r,currency:'IDR',deliverables:JSON.parse(r.deliverables_json),exclusions:JSON.parse(r.exclusions_json)})) })
 })
 
@@ -118,7 +118,7 @@ export const duitkuWebhook = async (c: any) => {
   if (!valid) return c.json({error:'invalid_signature'},401)
   const payment = await c.env.DB.prepare("SELECT p.*,o.id AS order_id,o.workspace_id,o.user_id,o.status AS order_status FROM commercial_payments p JOIN commercial_orders o ON o.id=p.order_id WHERE p.merchant_order_id=? AND p.provider='duitku_pop'").bind(merchantOrderId).first<any>()
   if (!payment || Number(amount)!==Number(payment.amount_idr) || (reference && payment.reference && reference!==payment.reference)) return c.json({error:'payment_mismatch'},409)
-  const eventKey = reference || merchantOrderId+':'+resultCode+':'+amount
+  const eventKey = (reference || merchantOrderId)+':'+resultCode+':'+amount
   const now = nowIso()
   try {
     await c.env.DB.prepare('INSERT INTO commercial_payment_events (id,payment_id,provider_event_key,result_code,amount_idr,payload_json,signature_valid,received_at) VALUES (?,?,?,?,?,?,1,?)')
