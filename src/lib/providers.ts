@@ -16,7 +16,7 @@ export const PROVIDERS = [
   { id: 'groq', purpose: 'Draf teks LLM (Groq chat completions)', secret: 'GROQ_API_KEY', billing: 'Free tier dengan rate limit; tier berbayar terpisah. Verifikasi di console.groq.com sebelum dipakai.' },
   { id: 'tavily', purpose: 'Riset web (Tavily Search) — hasil = petunjuk, bukan fakta', secret: 'TAVILY_API_KEY', billing: 'Kuota kredit gratis bulanan; 1 kredit per pencarian basic. Verifikasi di app.tavily.com.' },
   { id: 'apify', purpose: 'Actor resmi/terotorisasi (Apify) — persetujuan per-run', secret: 'APIFY_API_TOKEN', billing: 'Kredit platform gratis bulanan terbatas; Actor/proxy dapat memakai kredit. Bukan batas belanja.' },
-  { id: 'scrapely', purpose: 'Actor terotorisasi (Scrape.ly) — persetujuan per-run', secret: 'SCRAPELY_TOKEN', billing: 'Skema harga & endpoint BELUM diverifikasi. Jangan dipakai sebelum dokumentasi resmi ditinjau.' },
+  { id: 'scrapely', purpose: 'Actor terotorisasi (Scrape.ly) — persetujuan per-run', secret: 'SCRAPELY_TOKEN', billing: 'Harga tergantung Actor/plan; per-run spend cap dikirim ke API. Periksa usage dashboard setelah run.' },
 ] as const
 export type ProviderId = typeof PROVIDERS[number]['id']
 
