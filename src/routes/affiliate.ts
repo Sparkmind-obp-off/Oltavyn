@@ -326,11 +326,17 @@ affiliateApi.post('/agent/chat', async (c) => {
   const userMessageId = newId('agm'), userTime = nowIso()
   await c.env.DB.prepare("INSERT INTO agent_messages (id,conversation_id,role,content,metadata_json,created_at) VALUES (?,?,'user',?,'{}',?)").bind(userMessageId, conversationId, message, userTime).run()
 
-  const [{ results: history }, summary, { results: products }, { results: channels }] = await Promise.all([
+  await rateLimit(c.env.DB, `agent-chat:${uid(c)}`, 40, 3600)
+  const [{ results: history }, summary, { results: products }, { results: channels }, { results: evidence }, { results: opportunities }, { results: assets }, { results: experiments }, { results: scorecards }] = await Promise.all([
     c.env.DB.prepare("SELECT role,content FROM agent_messages WHERE conversation_id=? ORDER BY created_at DESC LIMIT 12").bind(conversationId).all(),
     c.env.DB.prepare("SELECT COUNT(*) AS products, SUM(CASE WHEN lifecycle_status IN ('shortlisted','selected') THEN 1 ELSE 0 END) AS shortlisted FROM affiliate_products WHERE workspace_id=? AND lifecycle_status<>'archived'").bind(ws.id).first<any>(),
     c.env.DB.prepare("SELECT id,title,category,price_amount,commission_rate_percent,product_rating,review_count,sold_count,evidence_state,lifecycle_status FROM affiliate_products WHERE workspace_id=? AND lifecycle_status<>'archived' ORDER BY updated_at DESC LIMIT 15").bind(ws.id).all(),
     c.env.DB.prepare("SELECT platform,channel_name,handle,status FROM affiliate_channels WHERE workspace_id=? AND status<>'archived' ORDER BY created_at DESC LIMIT 10").bind(ws.id).all(),
+    c.env.DB.prepare("SELECT title,source_type,source_url,excerpt,interpretation,observed_at,status FROM evidence_items WHERE workspace_id=? AND status='active' ORDER BY captured_at DESC LIMIT 12").bind(ws.id).all(),
+    c.env.DB.prepare("SELECT title,audience_problem,rationale,unknowns,is_hypothesis,status FROM opportunities WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 12").bind(ws.id).all(),
+    c.env.DB.prepare("SELECT title,format,status,updated_at FROM content_assets WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 12").bind(ws.id).all(),
+    c.env.DB.prepare("SELECT hypothesis,channel,status,published_at,next_decision FROM experiments WHERE workspace_id=? ORDER BY updated_at DESC LIMIT 12").bind(ws.id).all(),
+    c.env.DB.prepare("SELECT p.title AS product_title,s.score_demand,s.score_quality,s.score_commission,s.score_visual_potential,s.score_price_accessibility,s.score_seller_risk,s.weighted_total,s.created_at FROM affiliate_product_scorecards s JOIN affiliate_products p ON p.id=s.product_id WHERE p.workspace_id=? ORDER BY s.created_at DESC LIMIT 12").bind(ws.id).all(),
   ])
   const recent = (history as any[]).reverse().map((m) => ({ role: m.role, content: String(m.content).slice(0, 6000) }))
   let research: any = null
@@ -345,6 +351,11 @@ affiliateApi.post('/agent/chat', async (c) => {
     affiliate_summary: { products: Number(summary?.products) || 0, shortlisted: Number(summary?.shortlisted) || 0 },
     products: products,
     channels: channels,
+    evidence_ledger: evidence,
+    opportunities: opportunities,
+    content_assets: assets,
+    experiments: experiments,
+    recent_scorecards: scorecards,
     public_research_leads: research?.results || [],
   }
   const prompt = [
