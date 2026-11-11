@@ -7,9 +7,22 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "oltavyn-production",
-      "database_id": "94c9a84b-7fa8-49a4-b9f2-8006450a767b",
+      "database_name": "oltavyn-preview",
+      "database_id": "32386f39-80f9-40a1-adb7-a3970a168916",
+      "preview_database_id": "DB",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  "env": {
+    "production": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "oltavyn-production",
+          "database_id": "94c9a84b-7fa8-49a4-b9f2-8006450a767b",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  }
 }
