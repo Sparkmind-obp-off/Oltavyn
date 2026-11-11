@@ -208,42 +208,27 @@ function renderAuth(mode = 'login', err = null) {
       <div class="brand" style="padding:0;margin-bottom:28px"><div class="brand-mark" aria-hidden="true"><span></span></div><div><div class="brand-name">OLTAVYN</div><div class="brand-sub">Agentic Affiliate OS</div></div></div>
       <h1>Bangun sistem affiliate dari riset sampai hasil.</h1>
       <p>Satu ruang kerja untuk menilai produk, memahami audiens, menyusun konten, dan belajar dari performa yang benar-benar tercatat.</p>
-      <ol><li>Temukan produk dan peluang yang layak diuji</li><li>Susun strategi, skrip, dan kalender konten</li><li>Kelola semua kanal dan eksperimen dalam satu workspace</li><li>Gunakan Agent untuk membantu pekerjaan berulang</li></ol>
-      <div class="auth-proof"><span>Workspace pribadi</span><span>Data milik Anda</span><span>Persetujuan sebelum aksi eksternal</span></div><p style="margin-top:20px"><a href="#/pricing" style="color:#fff">Lihat paket layanan OLTAVYN →</a></p>
+      <ol><li>Mulai dengan akun Google</li><li>Dapatkan workspace Free tanpa kartu pembayaran</li><li>Tingkatkan layanan hanya ketika Anda membutuhkannya</li></ol>
+      <div class="auth-proof"><span>Workspace pribadi</span><span>Data milik Anda</span><span>Tanpa password OLTAVYN</span></div><p style="margin-top:20px"><a href="#/pricing" style="color:#fff">Lihat paket layanan OLTAVYN →</a></p>
     </section>
     <section class="auth-panel">
       <div class="card auth-card">
         <div class="tabs" role="tablist">
           <button role="tab" aria-selected="${mode === 'login'}" data-mode="login">Masuk</button>
-          <button role="tab" aria-selected="${mode === 'register'}" data-mode="register">Buat akun</button>
+          <button role="tab" aria-selected="${mode === 'register'}" data-mode="register">Daftar</button>
         </div>
         ${errorBox(err)}
-        ${clerkInstance ? html`<div id="clerk-auth" class="clerk-auth-slot"></div><p class="small muted auth-provider-note">Masuk dan pendaftaran diamankan oleh Clerk. Google tersedia setelah koneksi Google diaktifkan pada Clerk Dashboard.</p>` : html`<div class="alert alert-info">Autentikasi Clerk belum dikonfigurasi. Mode email dan kata sandi sementara masih aktif.</div>
-        <form id="auth-form" novalidate>
-          ${mode === 'register' ? html`<div class="field"><label class="l" for="display_name">Nama tampilan</label><input id="display_name" name="display_name" type="text" maxlength="80" autocomplete="name"></div>` : ''}
-          <div class="field"><label class="l" for="email">Email</label><input id="email" name="email" type="email" required autocomplete="email"></div>
-          <div class="field"><label class="l" for="password">Kata sandi</label><input id="password" name="password" type="password" required minlength="10" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}">
-            ${mode === 'register' ? html`<div class="hint">Minimal 10 karakter.</div>` : ''}</div>
-          <button class="btn btn-primary" style="width:100%" type="submit">${mode === 'login' ? 'Masuk' : 'Buat akun'}</button>
-        </form>`}
-        <p class="small muted" style="margin-top:14px">OLTAVYN tidak pernah meminta kata sandi, cookie, atau OTP akun media sosial/marketplace Anda.</p>
+        ${clerkInstance ? html`<div id="clerk-auth" class="clerk-auth-slot"></div><p class="small muted auth-provider-note">Gunakan akun Google untuk mendaftar atau masuk. Akun baru otomatis mendapatkan Free plan. OLTAVYN tidak meminta email atau password secara manual.</p>` : html`<div class="alert alert-info">Login Google belum aktif. Administrator perlu mengaktifkan Google Social Connection pada Clerk dan mengonfigurasi kunci Clerk di Cloudflare. Login email/password telah dinonaktifkan.</div>`}
+        <p class="small muted" style="margin-top:14px">Dengan melanjutkan, Anda menyetujui Ketentuan Layanan dan Kebijakan Privasi OLTAVYN.</p>
       </div>
     </section>
   </div>`.s
   $$('[data-mode]').forEach((b) => (b.onclick = () => renderAuth(b.dataset.mode)))
   if(clerkInstance){
     const slot=$('#clerk-auth');clerkAuthMounted=slot
-    if(mode==='register') clerkInstance.mountSignUp(slot,{fallbackRedirectUrl:'/'})
-    else clerkInstance.mountSignIn(slot,{fallbackRedirectUrl:'/'})
-    return
-  }
-  $('#auth-form').onsubmit = async (e) => {
-    e.preventDefault()
-    const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true
-    try {
-      const r = await api('POST', `/auth/${mode}`, compact(formData(e.target)))
-      state.user = r.user; await loadWorkspaces(); go('#/overview'); render()
-    } catch (er) { renderAuth(mode, er) }
+    const appearance={elements:{card:'clerk-card',footer:'clerk-footer'}}
+    if(mode==='register') clerkInstance.mountSignUp(slot,{fallbackRedirectUrl:'/',appearance})
+    else clerkInstance.mountSignIn(slot,{fallbackRedirectUrl:'/',appearance})
   }
 }
 
