@@ -57,7 +57,7 @@ ok(t.results.length === 1 && t.results[0].status === 'lead_unreviewed' && !!t.re
 console.log('Actors')
 await rejects(runActor(env, noNet, 'apify', { actor_id: 'evil/actor', confirm_run: true }), 'actor_not_allowlisted', 'non-allowlisted actor refused')
 const scrapelyEnv = { SCRAPELY_TOKEN: SECRET, SCRAPELY_ALLOWED_ACTORS: 'approved/task' }
-await rejects(runActor(scrapelyEnv, noNet, 'scrapely', { actor_id: 'approved/task', confirm_run: true }), 'provider_endpoint_unverified', 'Scrape.ly refuses requests until official base URL and run path are configured')
+await rejects(runActor(scrapelyEnv, noNet, 'scrapely', { actor_id: 'approved/task', confirm_run: true, max_total_charge_usd: 0.05, max_items: 10, timeout_seconds: 60 }), 'provider_unreachable', 'Scrape.ly uses the documented API base and path with mock transport')
 await rejects(runActor(env, noNet, 'apify', { actor_id: 'apify/web-scraper' }), 'explicit_approval_required', 'missing confirm_run refused')
 await rejects(runActor(env, noNet, 'apify', { actor_id: 'apify/web-scraper', confirm_run: 'true' }), 'explicit_approval_required', 'string "true" is not confirmation')
 await rejects(runActor(env, noNet, 'apify', { actor_id: 'apify/web-scraper', confirm_run: true }), 'spend_cap_required', 'Actor run requires an explicit per-run USD spend cap')
