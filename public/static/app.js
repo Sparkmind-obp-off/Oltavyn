@@ -146,7 +146,7 @@ async function loadWorkspaces() {
 const app = $('#app')
 function render() {
   if (state.user === undefined) return
-  if (!state.user) return renderAuth()
+  if (!state.user) return route().page === 'pricing' ? pagePublicCatalog() : renderAuth()
   if (!state.workspaces.length) return renderShell(renderFirstWorkspace)
   const { page, id } = route()
   const pages = { overview: pageOverview, research: pageResearch, opportunities: pageOpportunities, content: pageContent, experiments: pageExperiments, learning: pageLearning, commercial: pageCommercial, settings: pageSettings }
@@ -177,6 +177,25 @@ function renderShell(pageFn, id) {
   pageFn($('#main'), id)
 }
 
+async function pagePublicCatalog() {
+  app.innerHTML=html`
+  <div class="public-catalog-wrap">
+    <header class="public-catalog-nav"><div class="brand"><div class="brand-mark"><span></span></div><div><div class="brand-name" style="color:var(--brand)">OLTAVYN</div><div class="brand-sub">Agentic Affiliate OS</div></div></div><div class="row"><button class="btn btn-ghost" id="public-login">Masuk</button><button class="btn btn-primary" id="public-signup">Buat akun</button></div></header>
+    <section class="public-catalog-hero"><span class="package-kicker">OLTAVYN SERVICES</span><h1>Mulai dari strategi yang jelas. Tumbuhkan konten dengan sistem.</h1><p class="muted">Pilih dukungan riset, perencanaan kampanye, atau pendampingan operasional affiliate. Semua paket memiliki ruang lingkup dan batasan yang transparan.</p></section>
+    <div data-public-catalog class="grid grid-3"><div class="card">${skeleton(3)}</div></div>
+    <p class="small muted public-catalog-foot">Harga dan ruang lingkup dapat berubah sebelum checkout. Tidak ada jaminan penjualan atau pendapatan. Paket bulanan diperpanjang secara manual.</p>
+  </div>`.s
+  $('#public-login').onclick=()=>renderAuth('login')
+  $('#public-signup').onclick=()=>renderAuth('register')
+  try{
+    const d=await api('GET','/public/catalog')
+    const money=n=>new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n||0))
+    $('[data-public-catalog]').innerHTML=d.catalog.map(item=>html`<article class="card package-card"><div class="package-kicker">SERVICE PACKAGE</div><h2>${item.name}</h2><p class="muted">${item.description}</p><div class="package-price">${money(item.price_idr)} <small>${item.billing_type==='monthly'?'/ bulan':'/ sekali'}</small></div><h3>Yang Anda dapatkan</h3><ul>${item.deliverables.map(x=>html`<li>${x}</li>`)}</ul><details><summary>Lihat batasan layanan</summary><ul>${item.exclusions.map(x=>html`<li>${x}</li>`)}</ul></details><button class="btn btn-primary" data-public-buy style="width:100%;margin-top:14px">Daftar untuk memilih paket</button></article>`).map(x=>x.s).join('')
+    $$('[data-public-buy]').forEach(b=>b.onclick=()=>renderAuth('register'))
+    if(!d.checkout_enabled) $('[data-public-catalog]').insertAdjacentHTML('beforebegin','<div class="alert alert-info">Katalog tersedia untuk ditinjau. Pemesanan dan pembayaran akan dibuka setelah konfigurasi dan pengujian selesai.</div>')
+  }catch(e){$('[data-public-catalog]').innerHTML=errorBox(e).s}
+}
+
 // ---------- Auth ----------
 function renderAuth(mode = 'login', err = null) {
   if(clerkInstance && clerkAuthMounted){
@@ -190,7 +209,7 @@ function renderAuth(mode = 'login', err = null) {
       <h1>Bangun sistem affiliate dari riset sampai hasil.</h1>
       <p>Satu ruang kerja untuk menilai produk, memahami audiens, menyusun konten, dan belajar dari performa yang benar-benar tercatat.</p>
       <ol><li>Temukan produk dan peluang yang layak diuji</li><li>Susun strategi, skrip, dan kalender konten</li><li>Kelola semua kanal dan eksperimen dalam satu workspace</li><li>Gunakan Agent untuk membantu pekerjaan berulang</li></ol>
-      <div class="auth-proof"><span>Workspace pribadi</span><span>Data milik Anda</span><span>Persetujuan sebelum aksi eksternal</span></div>
+      <div class="auth-proof"><span>Workspace pribadi</span><span>Data milik Anda</span><span>Persetujuan sebelum aksi eksternal</span></div><p style="margin-top:20px"><a href="#/pricing" style="color:#fff">Lihat paket layanan OLTAVYN →</a></p>
     </section>
     <section class="auth-panel">
       <div class="card auth-card">
