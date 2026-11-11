@@ -4,15 +4,18 @@ import { ApiError, AppEnv } from './lib/core'
 import { auth, csrfGuard, requireAuth } from './routes/auth'
 import { api } from './routes/domain'
 import { affiliateApi } from './routes/affiliate'
+import commercialApi, { duitkuWebhook } from './routes/commercial'
 const app = new Hono<AppEnv>()
 app.use('*', secureHeaders({contentSecurityPolicy:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'",'https://fonts.googleapis.com'],fontSrc:["'self'",'https://fonts.gstatic.com'],imgSrc:["'self'",'data:','https:'],connectSrc:["'self'"],frameAncestors:["'none'"],formAction:["'self'"],baseUri:["'self'"]},referrerPolicy:'strict-origin-when-cross-origin'}))
 app.use('/api/*',async(c,next)=>{await next();c.header('Cache-Control','no-store')})
-app.use('/api/*',csrfGuard)
+app.use('/api/*',async(c,next)=>{if(c.req.path==='/api/webhooks/duitku/pop')return next();return csrfGuard(c,next)})
 app.get('/api/health',(c)=>c.json({ok:true,service:'oltavyn',version:'0.3.0'}))
 app.route('/api/auth',auth)
+app.post('/api/webhooks/duitku/pop',duitkuWebhook)
 app.use('/api/*',requireAuth)
 app.route('/api',api)
 app.route('/api/affiliate',affiliateApi)
+app.route('/api/commercial',commercialApi)
 const shell=`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OLTAVYN — Agentic Content OS</title><meta name="description" content="Workbench berbasis bukti: Riset → Peluang → Konten → Publikasi → Pembelajaran."><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"><link rel="stylesheet" href="/static/app.css"></head><body><a class="skip-link" href="#main">Lewati ke konten</a><div id="app" aria-live="polite"><p class="boot">Memuat OLTAVYN…</p></div><script type="module" src="/static/app.js"></script></body></html>`
 const affiliateShell=`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Affiliate OS — OLTAVYN</title><link rel="stylesheet" href="/static/affiliate.css"></head><body><main class="wrap" id="main">
 <header class="top"><div><div class="muted small">AVORLUNE · OLTAVYN / PRODUK 01</div><h1 style="margin:5px 0">Affiliate OS</h1><div class="muted small">Product Intelligence · Scorecard · Content Factory · Publikasi manual</div></div><div class="row"><a href="/">← Core Engine</a><span id="who" class="pill">Memeriksa sesi…</span></div></header>
