@@ -146,7 +146,7 @@ async function loadWorkspaces() {
 const app = $('#app')
 function render() {
   if (state.user === undefined) return
-  if (!state.user) return route().page === 'pricing' ? pagePublicCatalog() : renderAuth()
+  if (!state.user) { const p=route().page; if(p==='pricing') return pagePublicCatalog(); return renderAuth(p==='signup'||p==='register'?'register':'login') }
   if (!state.workspaces.length) return renderShell(renderFirstWorkspace)
   const { page, id } = route()
   const pages = { overview: pageOverview, research: pageResearch, opportunities: pageOpportunities, content: pageContent, experiments: pageExperiments, learning: pageLearning, commercial: pageCommercial, settings: pageSettings }
@@ -186,9 +186,9 @@ async function pagePublicCatalog() {
     <div data-public-catalog class="grid grid-3"><div class="card">${skeleton(3)}</div></div>
     <p class="small muted public-catalog-foot">Harga dan ruang lingkup dapat berubah sebelum checkout. Tidak ada jaminan penjualan atau pendapatan. Paket bulanan diperpanjang secara manual.</p>
   </div>`.s
-  $('#public-login').onclick=()=>renderAuth()
-  $('#public-signup').onclick=()=>renderAuth()
-  $('#public-free-start').onclick=()=>renderAuth()
+  $('#public-login').onclick=()=>renderAuth('login')
+  $('#public-signup').onclick=()=>renderAuth('register')
+  $('#public-free-start').onclick=()=>renderAuth('register')
   try{
     const d=await api('GET','/public/catalog')
     const money=n=>new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n||0))
@@ -199,7 +199,7 @@ async function pagePublicCatalog() {
 }
 
 // ---------- Auth ----------
-function renderAuth(_mode = 'login', err = null) {
+function renderAuth(mode = 'login', err = null) {
   if(clerkInstance && clerkAuthMounted){
     try { clerkInstance.unmountSignIn(clerkAuthMounted); clerkInstance.unmountSignUp(clerkAuthMounted) } catch {}
     clerkAuthMounted=null
@@ -225,7 +225,8 @@ function renderAuth(_mode = 'login', err = null) {
   </div>`.s
   if(clerkInstance){
     const slot=$('#clerk-auth');clerkAuthMounted=slot
-    clerkInstance.mountSignIn(slot,{fallbackRedirectUrl:'/',signUpUrl:'/',appearance:{layout:{socialButtonsPlacement:'top',socialButtonsVariant:'blockButton'}}})
+    if(mode==='register') clerkInstance.mountSignUp(slot,{fallbackRedirectUrl:'/',signInUrl:'/#/login',appearance:{layout:{socialButtonsPlacement:'top',socialButtonsVariant:'blockButton'}}})
+    else clerkInstance.mountSignIn(slot,{fallbackRedirectUrl:'/',signUpUrl:'/#/signup',appearance:{layout:{socialButtonsPlacement:'top',socialButtonsVariant:'blockButton'}}})
   }
 }
 
