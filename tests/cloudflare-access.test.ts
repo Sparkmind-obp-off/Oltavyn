@@ -15,6 +15,7 @@ test('Cloudflare Access JWT verification', async t => {
   privateKey = pair.privateKey
   publicJwk = { ...(await crypto.subtle.exportKey('jwk', pair.publicKey) as JsonWebKey), kid: 'test-kid', alg: 'RS256', use: 'sig' }
   originalFetch = globalThis.fetch
+  t.after(() => { globalThis.fetch = originalFetch })
   globalThis.fetch = (async () => new Response(JSON.stringify({ keys: [publicJwk] }), { status: 200, headers: { 'Content-Type': 'application/json' } })) as typeof fetch
 
   const makeToken = async (overrides: Record<string, unknown> = {}) => {
@@ -31,15 +32,18 @@ test('Cloudflare Access JWT verification', async t => {
   })
 
   await t.test('rejects a token with the wrong audience', async () => {
-    await assert.rejects(() => verifyAccessToken(await makeToken({ aud: ['wrong-audience'] }), team, [audience]), (error: any) => error?.code === 'access_invalid')
+    const token = await makeToken({ aud: ['wrong-audience'] })
+    await assert.rejects(() => verifyAccessToken(token, team, [audience]), (error: any) => error?.code === 'access_invalid')
   })
 
   await t.test('rejects an expired token', async () => {
-    await assert.rejects(() => verifyAccessToken(await makeToken({ exp: Math.floor(Date.now() / 1000) - 60 }), team, [audience]), (error: any) => error?.code === 'access_invalid')
+    const token = await makeToken({ exp: Math.floor(Date.now() / 1000) - 60 })
+    await assert.rejects(() => verifyAccessToken(token, team, [audience]), (error: any) => error?.code === 'access_invalid')
   })
 
   await t.test('rejects a token with the wrong issuer', async () => {
-    await assert.rejects(() => verifyAccessToken(await makeToken({ iss: 'https://attacker.example' }), team, [audience]), (error: any) => error?.code === 'access_invalid')
+    const token = await makeToken({ iss: 'https://attacker.example' })
+    await assert.rejects(() => verifyAccessToken(token, team, [audience]), (error: any) => error?.code === 'access_invalid')
   })
 
   await t.test('rejects a tampered signature', async () => {
@@ -50,5 +54,4 @@ test('Cloudflare Access JWT verification', async t => {
     await assert.rejects(() => verifyAccessToken(parts.join('.'), team, [audience]), (error: any) => error?.code === 'access_invalid')
   })
 
-  globalThis.fetch = originalFetch
 })
