@@ -54,4 +54,15 @@ test('Cloudflare Access JWT verification', async t => {
     await assert.rejects(() => verifyAccessToken(parts.join('.'), team, [audience]), (error: any) => error?.code === 'access_invalid')
   })
 
+  await t.test('rejects malformed signature bytes as an authorization error', async () => {
+    const token = await makeToken()
+    const parts = token.split('.')
+    parts[2] = '%%%not-base64%%%'
+    await assert.rejects(() => verifyAccessToken(parts.join('.'), team, [audience]), (error: any) => error?.code === 'access_invalid')
+  })
+
+  await t.test('rejects oversized tokens before key verification', async () => {
+    await assert.rejects(() => verifyAccessToken('x'.repeat(16_385), team, [audience]), (error: any) => error?.code === 'access_invalid')
+  })
+
 })
