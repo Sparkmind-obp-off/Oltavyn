@@ -17,6 +17,11 @@ app.use('/api/*',async(c,next)=>{if(c.req.path==='/api/webhooks/duitku/pop')retu
 app.get('/api/health',(c)=>c.json({ok:true,service:'oltavyn',version:'0.3.0'}))
 app.route('/api/auth',auth)
 app.post('/api/webhooks/duitku/pop',duitkuWebhook)
+app.get('/api/public/catalog',async(c)=>{
+  const rows=await c.env.DB.prepare("SELECT sku,name,description,price_idr,billing_type,deliverables_json,exclusions_json FROM commercial_catalog WHERE status='active' ORDER BY sort_order").all()
+  const env=c.env as any
+  return c.json({checkout_enabled:env.DUITKU_CHECKOUT_ENABLED==='true'&&!!env.DUITKU_MERCHANT_CODE&&!!env.DUITKU_API_KEY,catalog:(rows.results as any[]).map(r=>({...r,currency:'IDR',deliverables:JSON.parse(r.deliverables_json),exclusions:JSON.parse(r.exclusions_json)}))})
+})
 app.use('/api/*',requireAuth)
 app.route('/api',api)
 app.route('/api/affiliate',affiliateApi)
