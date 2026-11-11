@@ -2,6 +2,7 @@
 // Run: npm run test:providers
 import { groqGenerate, providerStatus, redact, runActor, tavilySearch, ProviderError } from '../src/lib/providers'
 import { weightedTotal } from '../src/routes/affiliate'
+import { AGENT_TOOLS, authorizeTool, validateToolInput } from '../src/lib/agentRuntime'
 
 let pass = 0, fail = 0
 const ok = (c: boolean, n: string, x?: unknown) => { if (c) { pass++; console.log('  ✓', n) } else { fail++; console.log('  ✗', n, x ?? '') } }
@@ -73,6 +74,18 @@ console.log('Timeout & redaction')
 const slow = groqGenerate(env, mock(200, {}, 20000), { prompt: 'x' })
 await rejects(slow, 'provider_unreachable', 'request times out (15s)')
 ok(redact(`token ${SECRET} and Bearer abc.def-123`, env) === 'token [REDACTED] and Bearer [REDACTED]', 'redact removes secrets and bearer tokens')
+
+console.log('Agent tool registry and permission policy')
+ok(AGENT_TOOLS.some((t) => t.id === 'workspace.get_summary' && t.enabled && t.permission === 'R0'), 'workspace summary is enabled read-only tool')
+ok(authorizeTool('workspace.get_summary', {}).ok, 'read-only tool passes policy')
+ok(!authorizeTool('publication.publish', {}).ok, 'publishing tool is denied')
+ok(!authorizeTool('provider.actor.run', { provider: 'apify', actor_id: 'x/y' }).ok, 'paid Actor tool remains disabled')
+ok(!authorizeTool('content.create_draft', { product_id: 'p1', format: 'video' }).ok, 'draft write remains disabled until approval executor exists')
+const listTool = AGENT_TOOLS.find((t) => t.id === 'products.list')!
+ok(validateToolInput(listTool, { query: 'rak' }).ok, 'known product query accepted')
+ok(!validateToolInput(listTool, { query: 'rak', sql: 'DROP TABLE users' }).ok, 'unknown tool input fields rejected')
+ok(!validateToolInput(listTool, { query: 'x'.repeat(81) }).ok, 'oversized tool input rejected')
+ok(!validateToolInput(listTool, []).ok, 'array is not a valid tool input object')
 
 console.log('Scorecard formula')
 ok(weightedTotal({ demand: 4, quality: 3, commission: 2, visual_potential: 5, price_accessibility: 4, seller_risk: 2 }) === 71, 'formula = 71')
