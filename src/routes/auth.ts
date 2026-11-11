@@ -28,7 +28,7 @@ async function verifyClerkToken(token: string, c: any) {
   if(parts.length!==3) throw new ApiError(401,'invalid_session','Sesi Clerk tidak valid.')
   const header=decodeJwtPart(parts[0]), claims=decodeJwtPart(parts[1])
   if(header.alg!=='RS256') throw new ApiError(401,'invalid_session','Algoritma token Clerk tidak diizinkan.')
-  const keyBytes=Uint8Array.from(atob(pem.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\\s/g,'')),ch=>ch.charCodeAt(0))
+  const keyBytes=Uint8Array.from(atob(pem.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\s/g,'')),ch=>ch.charCodeAt(0))
   const key=await crypto.subtle.importKey('spki',keyBytes,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['verify'])
   const valid=await crypto.subtle.verify('RSASSA-PKCS1-v1_5',key,b64urlBytes(parts[2]),new TextEncoder().encode(parts[0]+'.'+parts[1]))
   const now=Math.floor(Date.now()/1000), origin=new URL(c.req.url).origin
