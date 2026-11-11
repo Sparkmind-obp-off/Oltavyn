@@ -17,6 +17,10 @@ function client() {
     return { s: r.status, j }
   }
 }
+const rnd = Math.random().toString(36).slice(2, 8)
+const A = client(), B = client(), anon = client()
+const AF = '/affiliate'
+
 // Google-only authentication contract. Deep two-user isolation checks need two real Clerk test identities.
 const authConfig = await fetch(BASE + '/api/auth/config').then(r => r.json()).catch(() => null)
 if (authConfig?.auth_mode === 'google_only') {
@@ -31,9 +35,6 @@ if (authConfig?.auth_mode === 'google_only') {
   process.exit(fail ? 1 : 0)
 }
 
-const rnd = Math.random().toString(36).slice(2, 8)
-const A = client(), B = client(), anon = client()
-const AF = '/affiliate'
 
 console.log('Setup')
 let r = await anon('GET', `${AF}/providers`); ok(r.s === 401, 'affiliate API requires auth')
