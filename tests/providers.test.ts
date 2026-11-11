@@ -38,7 +38,7 @@ await rejects(groqGenerate(env, noNet, { prompt: '   ' }), 'validation_failed', 
 let g = await groqGenerate(env, mock(200, { model: 'llama-3.3-70b-versatile', choices: [{ message: { content: 'Draf hook' } }], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 } }), { prompt: 'Buat hook', model: 'bad model; drop' })
 ok(g.text === 'Draf hook' && g.usage?.total_tokens === 15 && g.persisted === false, 'groq returns bounded draft + usage, not persisted')
 const sent = JSON.parse(String(calls.at(-1)!.init.body))
-ok(sent.model === 'llama-3.3-70b-versatile' && sent.max_tokens === 1800, 'invalid model name replaced by default; output bounded')
+ok(sent.model === 'llama-3.3-70b-versatile' && sent.max_completion_tokens === 1800, 'invalid model name replaced by default; output bounded')
 ok(sent.messages[0].content.includes('Abaikan instruksi'), 'system prompt defends against injected instructions')
 await rejects(groqGenerate(env, mock(401, { error: { message: `bad key ${SECRET}` } }), { prompt: 'x' }), 'provider_auth_failed', 'auth failure mapped')
 try { await groqGenerate(env, mock(500, `upstream leaked ${SECRET}`), { prompt: 'x' }) } catch (e: any) { ok(e.code === 'provider_error' && !e.message.includes(SECRET), 'provider error body never forwarded') }
