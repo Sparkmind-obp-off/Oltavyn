@@ -103,6 +103,11 @@ r = await B('POST', `${AF}/workspaces/${wsB}/products`, { title: 'B prod', canon
 r = await B('POST', `${AF}/products/${pB}/experiments`, { experiment_id: exp, channel_id: ch }); ok(r.s === 400, 'B cannot link A experiment/channel to B product')
 r = await B('POST', `${AF}/products/${pB}/evidence`, { evidence_item_id: ev, relationship: 'supports' }); ok(r.s === 400, 'B cannot link A evidence to B product')
 
+console.log('Agent Live Chat workspace boundaries')
+r = await A('GET', AF + '/agent/conversations?workspace_id=' + encodeURIComponent(ws)); ok(r.s === 200 && Array.isArray(r.j.conversations), 'owner can list own workspace agent conversations')
+r = await B('GET', AF + '/agent/conversations?workspace_id=' + encodeURIComponent(ws)); ok(r.s === 404, 'other user cannot list agent conversations in foreign workspace')
+r = await A('GET', AF + '/agent/conversations?workspace_id=' + encodeURIComponent(wsB)); ok(r.s === 404, 'owner cannot access another workspace agent history')
+
 console.log('Providers (unconfigured; no external calls)')
 r = await A('GET', `${AF}/providers`); ok(r.s === 200 && r.j.providers.every((x) => ['unconfigured', 'configured_unverified', 'disabled'].includes(x.state)) && !JSON.stringify(r.j).match(/gsk_|tvly-|apify_api_/), 'provider status has no secrets')
 r = await A('POST', `${AF}/providers/apify/run`, { actor_id: 'x/y', confirm_run: true }); ok([503, 403].includes(r.s), 'actor run refused without config/allowlist')
