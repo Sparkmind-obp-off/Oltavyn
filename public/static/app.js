@@ -163,7 +163,7 @@ function renderShell(pageFn, id) {
       ${state.workspaces.length ? html`<div class="ws-switch"><label for="ws-select">Workspace</label>
         <select id="ws-select">${state.workspaces.map((w) => html`<option value="${w.id}" ${w.id === state.wsId ? raw('selected') : ''}>${w.name}</option>`)}<option value="__new">+ Workspace baru</option></select></div>` : ''}
       ${state.workspaces.length ? html`<nav class="nav">${NAV.map(([k, label, step]) => html`<a href="#/${k}" ${page === k ? raw('aria-current="page"') : ''}><span class="step" aria-hidden="true">${step}</span>${label}</a>`)}</nav>` : ''}
-      <div class="sidebar-foot"><div>${state.user.display_name || state.user.email}</div><div class="small muted" style="margin-top:4px">Paket akun: <strong>${String(state.user.plan_code || "free").toUpperCase()}</strong></div><button class="btn btn-ghost btn-sm" id="logout-btn">Keluar</button></div>
+      <div class="sidebar-foot"><div>${state.user.display_name || state.user.email}</div><div class="small muted" style="margin-top:4px">Paket akun: <strong>${String(state.user.plan_tier || "free").toUpperCase()}</strong></div><button class="btn btn-ghost btn-sm" id="logout-btn">Keluar</button></div>
     </aside>
     <main class="main" id="main" tabindex="-1"></main>
   </div>`.s
