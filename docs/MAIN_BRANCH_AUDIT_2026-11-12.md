@@ -46,8 +46,10 @@ The global protected API middleware now explicitly bypasses the `/api/auth/*` na
 6. **Live authentication:** Google sign-up, returning sign-in, existing-account linking, disabled-account rejection, expiry, logout, and cross-workspace isolation have not been exercised against a real Clerk test identity.
 7. **Duitku:** no real merchant credentials, invoice, callback, or settlement has been tested. Keep `DUITKU_CHECKOUT_ENABLED` false until sandbox verification succeeds.
 8. **Providers and Agent:** provider credentials and external calls are not validated by source inspection. Paid Actor execution must remain disabled unless explicitly approved, cost-capped, and tested.
-9. **Free plan limits:** Free is currently a permanent account tier, not a timed trial. No monthly AI-run quota should be advertised until server-side metering and hard enforcement exist.
-10. **Deployment:** no Pages Preview or Production deployment was performed by this audit.
+9. **Agentic execution scope:** the chat is a Groq-backed, bounded tool-calling assistant, but the active registry currently exposes only four read-only tools (`workspace.get_summary`, `products.list`, `channels.list`, `evidence.list`). `content.create_draft` is disabled pending a save-approval executor; `provider.actor.run` is disabled in the Agent registry; publication is disabled. The app has separate manual CRUD/content workflows and provider endpoints, but this is not yet a fully autonomous end-to-end agent. Do not market autonomous execution until write tools, approval UX, idempotency, rollback/recovery, and audit tests exist.
+10. **Provider cost controls:** the usage endpoint counts audit events only and explicitly reports `cost_tracking: unavailable`. Rate limits exist, but they are not a verified monetary spend cap. Never describe these as cost/credit caps.
+11. **Free plan limits:** Free is currently a permanent account tier, not a timed trial. No monthly AI-run quota should be advertised until server-side metering and hard enforcement exist.
+12. **Deployment:** no Pages Preview or Production deployment was performed by this audit.
 
 ## Required next validation sequence
 
