@@ -8,10 +8,15 @@ import commercialApi, { duitkuWebhook } from './routes/commercial'
 import adminApi from './routes/admin'
 import { requireCloudflareAccess } from './lib/cloudflareAccess'
 const app = new Hono<AppEnv>()
+// Clerk Protect (bot protection enabled on the Production instance, see /v1/environment protect_config)
+// loads bootstrap.js from cdn.protect.clerk.com and talks to <cid>-p.client.protect.clerk.com.
+// Blocking it by CSP makes Clerk sign-in/sign-up protect checks fail.
+const CLERK_PROTECT_SCRIPT=['https://cdn.protect.clerk.com']
+const CLERK_PROTECT_CONNECT=['https://cdn.protect.clerk.com','https://*.protect.clerk.com']
 app.use('*', async(c,next)=>{
   let clerkOrigin=''
   try { const key=c.env.CLERK_PUBLISHABLE_KEY; const part=key?.split('_')[2]; if(part) clerkOrigin='https://'+atob(part).slice(0,-1) } catch {}
-  const policy={defaultSrc:["'self'"],scriptSrc:["'self'",'https://app-prod.duitku.com','https://challenges.cloudflare.com',...(clerkOrigin?[clerkOrigin]:[])],styleSrc:["'self'","'unsafe-inline'",'https://fonts.googleapis.com',...(clerkOrigin?[clerkOrigin]:[])],fontSrc:["'self'",'https://fonts.gstatic.com',...(clerkOrigin?[clerkOrigin]:[])],imgSrc:["'self'",'data:','https:'],connectSrc:["'self'",'https://app-prod.duitku.com',...(clerkOrigin?[clerkOrigin]:[]),'https://api.clerk.com'],frameSrc:["'self'",'https://app-prod.duitku.com','https://challenges.cloudflare.com',...(clerkOrigin?[clerkOrigin]:[]),'https://accounts.google.com'],workerSrc:["'self'",'blob:'],frameAncestors:["'none'"],formAction:["'self'"],baseUri:["'self'"]}
+  const policy={defaultSrc:["'self'"],scriptSrc:["'self'",'https://app-prod.duitku.com','https://challenges.cloudflare.com',...(clerkOrigin?[clerkOrigin,...CLERK_PROTECT_SCRIPT]:[])],styleSrc:["'self'","'unsafe-inline'",'https://fonts.googleapis.com',...(clerkOrigin?[clerkOrigin]:[])],fontSrc:["'self'",'https://fonts.gstatic.com',...(clerkOrigin?[clerkOrigin]:[])],imgSrc:["'self'",'data:','https:'],connectSrc:["'self'",'https://app-prod.duitku.com',...(clerkOrigin?[clerkOrigin,...CLERK_PROTECT_CONNECT]:[]),'https://api.clerk.com'],frameSrc:["'self'",'https://app-prod.duitku.com','https://challenges.cloudflare.com',...(clerkOrigin?[clerkOrigin]:[]),'https://accounts.google.com'],workerSrc:["'self'",'blob:'],frameAncestors:["'none'"],formAction:["'self'"],baseUri:["'self'"]}
   return secureHeaders({contentSecurityPolicy:policy,referrerPolicy:'strict-origin-when-cross-origin'})(c,next)
 })
 // Production Clerk sessions are bound to the canonical domain; send page loads there (APIs/webhooks untouched).

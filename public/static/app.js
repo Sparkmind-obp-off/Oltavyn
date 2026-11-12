@@ -159,6 +159,7 @@ async function handleSsoCallback(){
   try{
     // handleRedirectCallback also performs the sign-in → sign-up transfer for first-time Google users.
     await clerkInstance.handleRedirectCallback({
+      signInUrl:'/#/login', signUpUrl:'/#/login',
       signInForceRedirectUrl:'/', signUpForceRedirectUrl:'/',
       signInFallbackRedirectUrl:'/', signUpFallbackRedirectUrl:'/',
       continueSignUpUrl:'/?auth_error=signup_incomplete', firstFactorUrl:'/?auth_error=sign_in_incomplete', secondFactorUrl:'/?auth_error=sign_in_incomplete',

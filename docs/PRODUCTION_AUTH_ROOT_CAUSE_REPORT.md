@@ -39,3 +39,11 @@ Status: **DEPLOYED — END-TO-END NOT YET VERIFIED** (real browser Google login 
 
 ## Rollback
 Redeploy the previous Pages deployment from the Cloudflare dashboard (Deployments → `71e7bd5b` → Rollback). Same Clerk Production instance/keys are used by both versions, so no credential mismatch. Note: rollback re-introduces RC-1/RC-2.
+
+## RC-4 — CSP blocked Clerk Protect — CONFIRMED (found during post-deploy browser check)
+* Evidence: production browser console: `Loading the script 'https://cdn.protect.clerk.com/ins_3Lzk…/bootstrap.js' violates … script-src`. Clerk `/v1/environment` returns a `protect_config` loader for this instance, and clerk-js 6.42.3 runs `protectCheck` on sign-in/sign-up resources.
+* Fix: `src/index.tsx` CSP allows `script-src https://cdn.protect.clerk.com` and `connect-src https://cdn.protect.clerk.com https://*.protect.clerk.com` (only when a Clerk key is configured). No other CSP loosening.
+
+## RC-5 — Callback fallback went to the Clerk Account Portal — CONFIRMED
+* Evidence: headless browser on `/sso-callback` without OAuth state ended on `https://accounts.oltavyn.biz.id/sign-in` (display_config `sign_in_url`).
+* Fix: `handleRedirectCallback` receives `signInUrl/signUpUrl: '/#/login'` so every fallback stays in the app.
