@@ -14,13 +14,14 @@
     "test:affiliate": "node tests/affiliate-smoke.mjs",
     "test:agent-tools": "esbuild tests/agent-tool-calling.test.ts --bundle --platform=node --format=esm --log-level=warning --outfile=.tmp/agent-tool-calling.test.mjs && node .tmp/agent-tool-calling.test.mjs",
     "test:providers": "esbuild tests/providers.test.ts --bundle --platform=node --format=esm --log-level=warning --outfile=.tmp/providers.test.mjs && node .tmp/providers.test.mjs",
-    "test:all": "npm run typecheck && npm run build && npm run db:migrate:local && npm run test:agent-tools && npm run test:providers && npm run test:payments && npm run test:cloudflare-access && npm run test:smoke && npm run test:affiliate",
+    "test:all": "npm run typecheck && npm run build && npm run db:migrate:local && npm run test:agent-tools && npm run test:providers && npm run test:payments && npm run test:agent-approvals && npm run test:cloudflare-access && npm run test:smoke && npm run test:affiliate",
     "deploy:prod": "npm run build && wrangler pages deploy dist --project-name oltavyn --branch main",
     "test:cloudflare-access": "esbuild tests/cloudflare-access.test.ts --bundle --platform=node --format=esm --log-level=warning --outfile=.tmp/cloudflare-access.test.mjs && node --test .tmp/cloudflare-access.test.mjs",
     "test:payments": "esbuild tests/payments.test.ts --bundle --platform=node --format=esm --log-level=warning --external:node:sqlite --outfile=.tmp/payments.test.mjs && node --no-warnings .tmp/payments.test.mjs",
     "db:migrate:preview": "wrangler d1 migrations apply oltavyn-preview --remote --env preview",
     "db:backup:prod": "mkdir -p backups && wrangler d1 export oltavyn-production --remote --env production --output backups/oltavyn-production-$(date +%Y%m%d-%H%M%S).sql",
-    "deploy:preview": "npm run build && wrangler pages deploy dist --project-name oltavyn --branch preview"
+    "deploy:preview": "npm run build && wrangler pages deploy dist --project-name oltavyn --branch preview",
+    "test:agent-approvals": "esbuild tests/agent-approvals.test.ts --bundle --platform=node --format=esm --log-level=warning --external:node:sqlite --outfile=.tmp/agent-approvals.test.mjs && node --no-warnings .tmp/agent-approvals.test.mjs"
   },
   "dependencies": {
     "hono": "^4.6.0"

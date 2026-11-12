@@ -303,6 +303,19 @@ async function loadInto(main, headHtml, loader, view) {
 const head = (title, desc, actions = '') => html`<div class="page-head"><div><h1>${title}</h1><p>${desc}</p></div><div class="row">${actions}</div></div>`
 
 
+/* ---------- Duitku POP (production JS). Browser results never grant access; only the server callback does. ---------- */
+function payWithDuitkuPop(reference){
+  return new Promise((resolve,reject)=>{
+    const run=()=>{ if(!window.checkout?.process) return reject(new Error('duitku_js_unavailable'))
+      window.checkout.process(reference,{defaultLanguage:'id',
+        successEvent:()=>{toast('Pembayaran diterima Duitku. Status pesanan diperbarui setelah notifikasi server terverifikasi.');resolve()},
+        pendingEvent:()=>{toast('Pembayaran menunggu penyelesaian.');resolve()},
+        errorEvent:()=>{toast('Pembayaran gagal atau dibatalkan.');resolve()},
+        closeEvent:()=>{toast('Jendela pembayaran ditutup. Anda dapat melanjutkan dari Riwayat Pesanan.');resolve()}}) }
+    if(window.checkout?.process) return run()
+    const sc=document.createElement('script'); sc.src='https://app-prod.duitku.com/lib/js/duitku.js'; sc.onload=run; sc.onerror=()=>reject(new Error('duitku_js_unavailable')); document.head.appendChild(sc)
+  })
+}
 /* ---------- Customer journey: catalog → order → checkout → fulfillment ---------- */
 async function pageCommercial(main) {
   main.innerHTML = html`${head('Paket & Pesanan', 'Pilih bantuan yang dibutuhkan, buat pesanan, lalu lanjutkan pembayaran dengan aman.')}
@@ -340,6 +353,7 @@ async function pageCommercial(main) {
         const key=crypto.randomUUID()
         const created=await api('POST','/commercial/orders',{workspace_id:state.wsId,sku:item.sku,customer_note:$('#order-note')?.value||'',idempotency_key:key})
         const checkout=await api('POST','/commercial/orders/'+created.order.id+'/checkout',{})
+        if(checkout.reference){ try { await payWithDuitkuPop(checkout.reference); await loadOrders(); return } catch(_) {} }
         if(checkout.payment_url){window.location.assign(checkout.payment_url);return}
         toast('Pesanan dibuat.');await loadOrders()
       }})

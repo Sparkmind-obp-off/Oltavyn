@@ -15,8 +15,8 @@ export const AGENT_POLICY_VERSION = 'v1'
 export const MAX_TOOL_CALLS_PER_TURN = 4
 export const MAX_AGENT_STEPS_PER_RUN = 12
 
-// Phase 1 deliberately exposes only bounded, read-only tools.
-// Mutating, paid and publishing tools stay disabled until approval UX and executors exist.
+// Read tools run immediately. Write tools (W1) only create an approval request; a dedicated
+// executor saves after explicit user approval. Paid (P1) and publishing (P2) tools stay disabled.
 export const AGENT_TOOLS: ToolContract[] = [
   {
     id: 'workspace.get_summary', version: '1.0.0',
@@ -41,11 +41,31 @@ export const AGENT_TOOLS: ToolContract[] = [
     permission: 'R0', input: {}, approval: 'none', enabled: true,
   },
   {
-    id: 'content.create_draft', version: '1.0.0',
-    description: 'Prepare a content draft for preview; does not publish or claim product facts.',
+    id: 'product.get', version: '1.0.0',
+    description: 'Read one product with its linked evidence and latest scorecard.',
+    permission: 'R0', input: { product_id: { type: 'string', required: true, max: 100 } }, approval: 'none', enabled: true,
+  },
+  {
+    id: 'opportunities.list', version: '1.0.0',
+    description: 'List audience opportunities (problem statements) in the active workspace. Needed before saving a content draft.',
+    permission: 'R0', input: {}, approval: 'none', enabled: true,
+  },
+  {
+    id: 'content.list', version: '1.0.0',
+    description: 'List saved content drafts/assets and their review status.',
+    permission: 'R0', input: {}, approval: 'none', enabled: true,
+  },
+  {
+    id: 'content.save_draft', version: '1.1.0',
+    description: 'Request to SAVE a draft (script, brief, campaign plan, content calendar, product evaluation, caption) into Content Studio. Nothing is saved until the user approves it in the UI. Never claim it was saved.',
     permission: 'W1',
-    input: { product_id: { type: 'string', required: true, max: 100 }, format: { type: 'string', required: true, max: 40 } },
-    approval: 'confirm_save', enabled: false,
+    input: {
+      opportunity_id: { type: 'string', required: true, max: 100 },
+      title: { type: 'string', required: true, max: 200 },
+      format: { type: 'string', required: true, max: 40 },
+      body: { type: 'string', required: true, max: 20000 },
+    },
+    approval: 'confirm_save', enabled: true,
   },
   {
     id: 'provider.actor.run', version: '1.0.0',
@@ -84,6 +104,13 @@ export function authorizeTool(toolId: string, input: unknown) {
   if (!tool.enabled || tool.approval === 'disabled') return { ok: false as const, status: 403, error: 'tool_disabled' }
   const valid = validateToolInput(tool, input)
   if (!valid.ok) return { ok: false as const, status: 400, error: valid.error }
-  if (tool.permission !== 'R0' && tool.permission !== 'R1') return { ok: false as const, status: 403, error: 'approval_flow_not_implemented' }
-  return { ok: true as const, tool, input: valid.value }
+  if (tool.permission === 'R0' || tool.permission === 'R1') return { ok: true as const, tool, input: valid.value, requiresApproval: false }
+  if (tool.permission === 'W1' && tool.approval === 'confirm_save') return { ok: true as const, tool, input: valid.value, requiresApproval: true }
+  return { ok: false as const, status: 403, error: 'approval_flow_not_implemented' }
+}
+
+export const DRAFT_FORMATS = ['brief','short_video_script','caption','article','thread','campaign_plan','content_calendar','product_evaluation','other'] as const
+export async function actionHash(toolId: string, input: unknown) {
+  const data = new TextEncoder().encode(toolId + '\n' + JSON.stringify(input))
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', data))].map((b) => b.toString(16).padStart(2, '0')).join('')
 }

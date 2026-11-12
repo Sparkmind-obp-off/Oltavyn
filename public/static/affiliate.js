@@ -192,7 +192,27 @@ async function loadAgent() {
   try {
     await loadAgentConversations()
     await loadAgentMessages()
+    await loadAgentApprovals()
   } catch (e) { $('#agent-messages').innerHTML = '<p class="msg bad">' + esc(e.message) + '</p>' }
+}
+
+// ---------- Agent approvals (draft saves require an explicit decision) ----------
+async function loadAgentApprovals() {
+  let box = $('#agent-approvals')
+  if (!box) { const aside = $('#agent-conversations')?.parentElement; if (!aside) return; aside.insertAdjacentHTML('beforeend', '<h3 style="margin-top:16px">Menunggu persetujuan</h3><div id="agent-approvals" class="agent-conversations"></div>'); box = $('#agent-approvals') }
+  try {
+    const d = await api('GET', '/affiliate/agent/approvals?workspace_id=' + encodeURIComponent(state.ws))
+    const pending = d.approvals.filter((a) => a.status === 'pending')
+    const done = d.approvals.filter((a) => a.status !== 'pending').slice(0, 5)
+    box.innerHTML = (pending.length ? pending.map((a) => '<div class="item"><strong>' + esc(a.preview?.title) + '</strong><div class="small muted">' + esc(a.preview?.format) + ' · peluang: ' + esc(a.preview?.opportunity) + ' · ' + esc(a.preview?.body_length) + ' karakter</div><details><summary class="small">Pratinjau isi</summary><pre>' + esc(a.body) + '</pre></details><div class="row"><button class="btn btn-sm" data-approve="' + esc(a.id) + '">Setujui & simpan</button><button class="btn btn-ghost btn-sm" data-reject="' + esc(a.id) + '">Tolak</button></div></div>').join('') : '<p class="small muted">Tidak ada draf yang menunggu.</p>')
+      + done.map((a) => '<div class="small muted">' + esc(a.preview?.title) + ' — ' + esc({ approved: 'disimpan', rejected: 'ditolak', expired: 'kedaluwarsa' }[a.status] || a.status) + '</div>').join('')
+    $$('[data-approve],[data-reject]', box).forEach((b) => { b.onclick = () => withBusy(b, async () => {
+      const id = b.dataset.approve || b.dataset.reject
+      const r = await api('POST', '/affiliate/agent/approvals/' + encodeURIComponent(id) + '/decision', { decision: b.dataset.approve ? 'approve' : 'reject' })
+      show(r.saved ? 'Draf tersimpan di Content Studio. Buka /#/content/' + r.asset_id + ' untuk meninjau.' : 'Permintaan ditolak; tidak ada yang disimpan.')
+      await loadAgentApprovals()
+    }) })
+  } catch (e) { box.innerHTML = '<p class="small msg bad">' + esc(e.message) + '</p>' }
 }
 function startAgentConversation() {
   state.agentConversationId = null
@@ -222,6 +242,7 @@ $('#agent-form').onsubmit = (e) => {
     try {
       const d = await api('POST', '/affiliate/agent/chat', { workspace_id: state.ws, conversation_id: state.agentConversationId, message, use_tavily: useTavily, model: $('#agent-model').value.trim() })
       state.agentConversationId = d.conversation_id
+      if (d.message?.metadata?.approvals?.length) { show(d.message.metadata.approvals.length + ' draf menunggu persetujuanmu (belum tersimpan).'); loadAgentApprovals() }
       await loadAgentMessages()
       await loadAgentConversations()
       if (d.research?.note) show('Riset Tavily selesai. Hasil masih berupa petunjuk yang perlu ditinjau.')

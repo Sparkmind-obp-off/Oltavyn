@@ -87,7 +87,7 @@ export async function groqGenerate(env: ProviderEnv, fetchImpl: FetchLike, input
   const key = requireKey(env, 'groq')
   const prompt = str(input.prompt, 12000).trim()
   if (!prompt) throw new ProviderError(400, 'validation_failed', 'Prompt wajib diisi.')
-  const model = /^[A-Za-z0-9._\-\/]{1,100}$/.test(input.model || '') ? input.model! : 'llama-3.3-70b-versatile'
+  const model = /^[A-Za-z0-9._\-\/]{1,100}$/.test(input.model || '') ? input.model! : (env.GROQ_MODEL || 'openai/gpt-oss-120b')
   const data = await call(fetchImpl, 'groq', `${baseUrl(env, 'groq')}/chat/completions`, {
     method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model, messages: [{ role: 'system', content: GROQ_SYSTEM }, { role: 'user', content: prompt }], temperature: 0.4, max_completion_tokens: 1800 }),
