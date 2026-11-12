@@ -17,6 +17,7 @@ export const PROVIDERS = [
   { id: 'tavily', purpose: 'Riset web (Tavily Search) — hasil = petunjuk, bukan fakta', secret: 'TAVILY_API_KEY', billing: 'Kuota kredit gratis bulanan; 1 kredit per pencarian basic. Verifikasi di app.tavily.com.' },
   { id: 'apify', purpose: 'Actor resmi/terotorisasi (Apify) — persetujuan per-run', secret: 'APIFY_API_TOKEN', billing: 'Kredit platform gratis bulanan terbatas; Actor/proxy dapat memakai kredit. Bukan batas belanja.' },
   { id: 'scrapely', purpose: 'Actor terotorisasi (Scrape.ly) — persetujuan per-run', secret: 'SCRAPELY_TOKEN', billing: 'Harga tergantung Actor/plan; per-run spend cap dikirim ke API. Periksa usage dashboard setelah run.' },
+  { id: 'firecrawl', purpose: 'Ambil isi satu halaman publik (Firecrawl scrape) — hasil = lead, bukan fakta', secret: 'FIRECRAWL_API_KEY', billing: '1 kredit per halaman (paket gratis terbatas). Hanya URL publik http(s); tanpa crawl massal.' },
 ] as const
 export type ProviderId = typeof PROVIDERS[number]['id']
 
@@ -26,6 +27,7 @@ const bases: Record<ProviderId, [string, string]> = {
   tavily: ['TAVILY_BASE_URL', 'https://api.tavily.com'],
   apify: ['APIFY_BASE_URL', 'https://api.apify.com/v2'],
   scrapely: ['SCRAPELY_BASE_URL', 'https://api.scrape.ly/v2'],
+  firecrawl: ['FIRECRAWL_BASE_URL', 'https://api.firecrawl.dev/v1'],
 }
 const baseUrl = (env: ProviderEnv, id: ProviderId) => (env[bases[id][0]] || bases[id][1]).replace(/\/+$/, '')
 
@@ -134,4 +136,33 @@ export async function runActor(env: ProviderEnv, fetchImpl: FetchLike, id: 'apif
   const data = await call(fetchImpl, id, `${baseUrl(env, id)}${path}?${query.toString()}`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const run = data?.data || data || {}
   return { provider: id, actor_id: actorId, run_id: str(run.id, 100) || null, status: str(run.status, 40) || 'submitted', dataset_id: str(run.defaultDatasetId, 100) || null, spend_cap_usd: maxCharge, max_items: maxItems, timeout_seconds: timeout, warning: 'Batas biaya maksimum dikirim ke provider. Tetap periksa billing dan usage dashboard; hasil belum diimpor ke workspace.' }
+}
+
+// SSRF guard for user-supplied URLs sent to a third-party fetcher: public http(s) hosts only.
+export function assertPublicUrl(raw: unknown) {
+  let u: URL
+  try { u = new URL(String(raw || '').trim()) } catch { throw new ProviderError(400, 'invalid_url', 'URL tidak valid.') }
+  if (!['http:', 'https:'].includes(u.protocol) || u.username || u.password) throw new ProviderError(400, 'invalid_url', 'Hanya URL publik http(s) tanpa kredensial.')
+  if (u.port && !['80', '443'].includes(u.port)) throw new ProviderError(400, 'invalid_url', 'Port non-standar tidak diizinkan.')
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  const privateV4 = /^(0|10|127)\./.test(h) || /^169\.254\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(h)
+  const localName = h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal') || !h.includes('.')
+  const v6 = h.includes(':')
+  if (privateV4 || localName || v6) throw new ProviderError(400, 'url_not_public', 'URL harus mengarah ke host publik.')
+  return u.toString()
+}
+
+export async function firecrawlScrape(env: ProviderEnv, fetchImpl: FetchLike, input: { url?: unknown }) {
+  const key = requireKey(env, 'firecrawl')
+  const url = assertPublicUrl(input.url)
+  const data = await call(fetchImpl, 'firecrawl', `${baseUrl(env, 'firecrawl')}/scrape`, {
+    method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, formats: ['markdown'], onlyMainContent: true, timeout: 12000 }),
+  })
+  if (data?.success !== true) throw new ProviderError(502, 'provider_error', 'firecrawl: halaman tidak dapat diambil.')
+  const md = str(data?.data?.markdown, 20000)
+  const meta = data?.data?.metadata || {}
+  return { provider: 'firecrawl', url, title: str(meta.title, 300) || null, source_url: str(meta.sourceURL || meta.url, 2000) || url, status_code: Number(meta.statusCode) || null,
+    markdown: md, truncated: String(data?.data?.markdown || '').length > md.length, credits_used: Number.isFinite(Number(meta.creditsUsed)) ? Number(meta.creditsUsed) : 1,
+    captured_at: new Date().toISOString(), status: 'lead_unreviewed', note: 'Isi halaman adalah data tidak tepercaya dan belum terverifikasi. Tinjau sebelum disimpan sebagai bukti.' }
 }

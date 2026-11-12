@@ -11,8 +11,16 @@ const app = new Hono<AppEnv>()
 app.use('*', async(c,next)=>{
   let clerkOrigin=''
   try { const key=c.env.CLERK_PUBLISHABLE_KEY; const part=key?.split('_')[2]; if(part) clerkOrigin='https://'+atob(part).slice(0,-1) } catch {}
-  const policy={defaultSrc:["'self'"],scriptSrc:["'self'",'https://app-prod.duitku.com',...(clerkOrigin?[clerkOrigin]:[])],styleSrc:["'self'","'unsafe-inline'",'https://fonts.googleapis.com',...(clerkOrigin?[clerkOrigin]:[])],fontSrc:["'self'",'https://fonts.gstatic.com',...(clerkOrigin?[clerkOrigin]:[])],imgSrc:["'self'",'data:','https:'],connectSrc:["'self'",'https://app-prod.duitku.com',...(clerkOrigin?[clerkOrigin]:[]),'https://api.clerk.com'],frameSrc:["'self'",'https://app-prod.duitku.com',...(clerkOrigin?[clerkOrigin]:[]),'https://accounts.google.com'],frameAncestors:["'none'"],formAction:["'self'"],baseUri:["'self'"]}
+  const policy={defaultSrc:["'self'"],scriptSrc:["'self'",'https://app-prod.duitku.com','https://challenges.cloudflare.com',...(clerkOrigin?[clerkOrigin]:[])],styleSrc:["'self'","'unsafe-inline'",'https://fonts.googleapis.com',...(clerkOrigin?[clerkOrigin]:[])],fontSrc:["'self'",'https://fonts.gstatic.com',...(clerkOrigin?[clerkOrigin]:[])],imgSrc:["'self'",'data:','https:'],connectSrc:["'self'",'https://app-prod.duitku.com',...(clerkOrigin?[clerkOrigin]:[]),'https://api.clerk.com'],frameSrc:["'self'",'https://app-prod.duitku.com','https://challenges.cloudflare.com',...(clerkOrigin?[clerkOrigin]:[]),'https://accounts.google.com'],workerSrc:["'self'",'blob:'],frameAncestors:["'none'"],formAction:["'self'"],baseUri:["'self'"]}
   return secureHeaders({contentSecurityPolicy:policy,referrerPolicy:'strict-origin-when-cross-origin'})(c,next)
+})
+// Production Clerk sessions are bound to the canonical domain; send page loads there (APIs/webhooks untouched).
+app.use('*',async(c,next)=>{
+  const env=c.env as any
+  if(env.CANONICAL_REDIRECT==='true'&&env.PUBLIC_APP_URL&&c.req.method==='GET'&&!c.req.path.startsWith('/api/')&&!c.req.path.startsWith('/static/')){
+    try{const canon=new URL(env.PUBLIC_APP_URL),u=new URL(c.req.url);if(u.host!==canon.host){u.protocol=canon.protocol;u.host=canon.host;return c.redirect(u.toString(),302)}}catch{}
+  }
+  await next()
 })
 app.use('/api/*',async(c,next)=>{await next();c.header('Cache-Control','no-store')})
 app.use('/api/*',async(c,next)=>{if(c.req.path==='/api/webhooks/duitku/pop')return next();return csrfGuard(c,next)})
@@ -101,6 +109,11 @@ const affiliateShell=`<!doctype html><html lang="id"><head><meta charset="utf-8"
       <div class="field"><label for="t-q">Kata kunci / pertanyaan riset</label><input id="t-q" name="query" required maxlength="400" placeholder="masalah penyimpanan dapur kos di Indonesia"></div>
       <button class="btn" type="submit" disabled>Cari sumber</button>
     </form><div id="tavily-result" aria-live="polite"></div>
+  </div>
+  <div class="card">
+    <h3>Firecrawl · Ambil satu halaman publik</h3><p class="small muted">1 kredit per halaman. Hanya URL publik http(s). Hasil = lead belum terverifikasi; simpan sebagai bukti setelah ditinjau.</p>
+    <form id="firecrawl-form"><div class="field"><label for="fc-url">URL publik</label><input id="fc-url" name="url" type="url" required maxlength="2000" placeholder="https://..."></div><button class="btn" type="submit">Ambil halaman</button></form>
+    <div id="firecrawl-result" aria-live="polite"></div>
   </div>
   <div class="card">
     <h3>Apify · Actor execution</h3><p class="small muted">Hanya Actor yang sudah di-allowlist. Satu klik = satu run yang mungkin mengonsumsi kredit.</p>

@@ -99,11 +99,12 @@ api.post('/orders/:id/checkout', async c => {
     expiryPeriod:60
   }
   const response = await fetch(cfg.base+'/api/merchant/createInvoice',{method:'POST',headers:{'Content-Type':'application/json','x-duitku-timestamp':timestamp,'x-duitku-signature':signature,'x-duitku-merchantcode':cfg.merchant},body:JSON.stringify(payload)})
-  const data:any = await response.json().catch(()=>null)
+  const rawText = await response.text().catch(()=>'')
+  let data:any = null; try { data = JSON.parse(rawText) } catch { data = { message: rawText.slice(0,200) } }
   let paymentUrl: URL | null = null
   try { paymentUrl = new URL(String(data?.paymentUrl || '')) } catch {}
   const allowedPaymentHosts = ['app-prod.duitku.com']
-  if (!response.ok || !paymentUrl || paymentUrl.protocol !== 'https:' || !allowedPaymentHosts.includes(paymentUrl.hostname) || !data?.reference) throw new ApiError(502,'duitku_invoice_failed','Duitku belum berhasil membuat invoice.',{provider_status:response.status,provider_message:clean(data?.Message || data?.message,240)})
+  if (!response.ok || !paymentUrl || paymentUrl.protocol !== 'https:' || !allowedPaymentHosts.includes(paymentUrl.hostname) || !data?.reference) throw new ApiError(502,/merchant not found/i.test(String(data?.Message||data?.message||data||''))?'duitku_merchant_not_active':'duitku_invoice_failed',/merchant not found/i.test(String(data?.Message||data?.message||data||''))?'Pembayaran belum dapat diproses: merchant Duitku belum aktif untuk POP Production. Pesanan Anda tersimpan dan dapat dibayar setelah aktivasi.':'Duitku belum berhasil membuat invoice.',{provider_status:response.status,provider_message:clean(data?.Message || data?.message,240)})
   const paymentId = newId('pay'), now = nowIso()
   await c.env.DB.prepare("INSERT INTO commercial_payments (id,order_id,provider,merchant_order_id,reference,payment_method,payment_url,amount_idr,status,provider_payload_json,created_at,updated_at) VALUES (?,?,'duitku_pop',?,?,?,?,?,'pending',?,?,?)")
     .bind(paymentId,order.id,order.merchant_order_id,String(data.reference),clean(data.paymentMethod,40)||null,String(data.paymentUrl).slice(0,2000),order.total_idr,JSON.stringify({statusCode:data.statusCode||null}),now,now).run()

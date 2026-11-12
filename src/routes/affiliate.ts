@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { ApiError, AppEnv, audit, newId, notFound, nowIso, rateLimit, sha256Hex } from '../lib/core'
 import { DURATIONS, generateAffiliatePackage } from '../lib/affiliateGenerator'
-import { ProviderEnv, ProviderError, groqGenerate, providerStatus, runActor, tavilySearch } from '../lib/providers'
+import { ProviderEnv, ProviderError, firecrawlScrape, groqGenerate, providerStatus, runActor, tavilySearch } from '../lib/providers'
 import { AGENT_POLICY_VERSION, AGENT_TOOLS, MAX_AGENT_STEPS_PER_RUN, authorizeTool } from '../lib/agentRuntime'
 import { AgentToolError, createApproval, decideApproval, executeReadTool, toolPermission, toolVersion } from '../lib/agentExecutors'
 import { BudgetError, assertBudget, recordUsage, usageSummary } from '../lib/usageLedger'
@@ -610,5 +610,6 @@ affiliateApi.get('/providers', (c) => c.json({ providers: providerStatus(penv(c)
 affiliateApi.get('/providers/usage', async (c) => c.json(await usageSummary(c.env.DB, c.env as any, uid(c))))
 affiliateApi.post('/providers/groq/generate', async (c) => { const d = await json(c); if (!d.model) d.model = penv(c).GROQ_MODEL; return c.json(await providerCall(c, 'groq', 20, () => groqGenerate(penv(c), fetch, d), { operation: 'generate', units: (o) => ({ ...(o.usage || {}), model: o.model }) })) })
 affiliateApi.post('/providers/tavily/search', async (c) => { const d = await json(c); return c.json(await providerCall(c, 'tavily', 20, () => tavilySearch(penv(c), fetch, d), { operation: 'search', units: () => ({ search_credits: 1 }) })) })
+affiliateApi.post('/providers/firecrawl/scrape', async (c) => { const d = await json(c); return c.json(await providerCall(c, 'firecrawl', 20, () => firecrawlScrape(penv(c), fetch, d), { operation: 'scrape', units: (o) => ({ firecrawl_credits: o.credits_used }), ref: (o) => o.source_url })) })
 affiliateApi.post('/providers/apify/run', async (c) => { const d = await json(c); const cap = Number(d.max_total_charge_usd); return c.json(await providerCall(c, 'apify', 2, () => runActor(penv(c), fetch, 'apify', d), { operation: 'actor.run', reserveUsd: Number.isFinite(cap) && cap > 0 ? cap : 1, units: (o) => ({ actor_id: o.actor_id, max_items: o.max_items }), ref: (o) => o.run_id }), 202) })
 affiliateApi.post('/providers/scrapely/run', async (c) => { const d = await json(c); const cap = Number(d.max_total_charge_usd); return c.json(await providerCall(c, 'scrapely', 2, () => runActor(penv(c), fetch, 'scrapely', d), { operation: 'actor.run', reserveUsd: Number.isFinite(cap) && cap > 0 ? cap : 1, units: (o) => ({ actor_id: o.actor_id, max_items: o.max_items }), ref: (o) => o.run_id }), 202) })

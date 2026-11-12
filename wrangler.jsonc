@@ -30,14 +30,15 @@
       "vars": {
         "DUITKU_BASE_URL": "https://api-prod.duitku.com",
         "PUBLIC_APP_URL": "https://oltavyn.biz.id",
-        // Keep false until the owner explicitly activates customer checkout.
-        "DUITKU_CHECKOUT_ENABLED": "false",
+        // Owner-approved 2026-11-12. Invoice creation still fails closed if the merchant is not active.
+        "DUITKU_CHECKOUT_ENABLED": "true",
         "PROVIDERS_ENABLED": "true",
         "SCRAPELY_ENABLED": "false",
-        "CLERK_ISSUER": "https://amused-joey-1181.clerk.accounts.dev",
+        "CLERK_ISSUER": "https://clerk.oltavyn.biz.id",
         "CLERK_AUTHORIZED_PARTIES": "https://oltavyn.biz.id,https://affiliate-os.avorlune.biz.id,https://oltavyn.pages.dev",
         "OLTAVYN_ADMIN_EMAILS": "sparkmind.support@gmail.com",
         "GROQ_MODEL": "openai/gpt-oss-120b",
+        "CANONICAL_REDIRECT": "true",
         "CF_ACCESS_TEAM_DOMAIN": "purple-rice-17ec.cloudflareaccess.com"
       }
     }

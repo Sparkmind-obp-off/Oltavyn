@@ -325,6 +325,17 @@ $('#tavily-form').onsubmit = (e) => {
     } catch (err) { out.textContent = err.message }
   })
 }
+$('#firecrawl-form').onsubmit = (e) => {
+  e.preventDefault()
+  const out = $('#firecrawl-result'); out.textContent = 'Mengambil halaman…'
+  withBusy(e.submitter, async () => {
+    try {
+      const d = await api('POST', '/affiliate/providers/firecrawl/scrape', formValues(e.target))
+      out.innerHTML = '<p class="small muted">' + esc(d.note) + '</p><p><strong>' + esc(d.title || d.url) + '</strong> · <a href="' + esc(d.source_url) + '" target="_blank" rel="noopener noreferrer">sumber</a> · ' + esc(d.credits_used) + ' kredit' + (d.truncated ? ' · dipotong' : '') + '</p><pre>' + esc(d.markdown.slice(0, 4000)) + '</pre>'
+      await loadProviderUsage()
+    } catch (err) { out.textContent = err.message }
+  })
+}
 for (const id of ['apify', 'scrapely']) {
   const form = $('#' + id + '-form'), out = $('#' + id + '-result')
   form.onsubmit = (e) => {

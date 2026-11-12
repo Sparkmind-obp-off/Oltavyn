@@ -1,6 +1,6 @@
 // Provider adapter contract tests with mocked fetch. NO network calls are made.
 // Run: npm run test:providers
-import { groqGenerate, providerStatus, redact, runActor, tavilySearch, ProviderError } from '../src/lib/providers'
+import { firecrawlScrape, groqGenerate, providerStatus, redact, runActor, tavilySearch, ProviderError } from '../src/lib/providers'
 import { weightedTotal } from '../src/routes/affiliate'
 import { AGENT_TOOLS, authorizeTool, validateToolInput } from '../src/lib/agentRuntime'
 
@@ -69,6 +69,15 @@ ok(a.run_id === 'run1' && apifyRunUrl.pathname.endsWith('/acts/apify~web-scraper
 const sc = await runActor(scrapelyEnv, mock(202, { data: { id: 'scr1', status: 'QUEUED' } }), 'scrapely', { actor_id: 'approved~task', confirm_run: true, input: {}, max_total_charge_usd: 0.05, max_items: 10, timeout_seconds: 60 })
 const scrapelyRunUrl = new URL(calls.at(-1)!.url)
 ok(sc.run_id === 'scr1' && scrapelyRunUrl.href.startsWith('https://api.scrape.ly/v2/actors/approved~task/runs?') && scrapelyRunUrl.searchParams.get('maxTotalChargeUsd') === '0.05', 'Scrape.ly uses documented API path and sends spend cap')
+
+console.log('Firecrawl')
+const fenv = { FIRECRAWL_API_KEY: SECRET }
+for (const bad of ['http://localhost/x','http://127.0.0.1/','http://10.0.0.5/','http://169.254.169.254/latest/meta-data','http://192.168.1.1/','http://[::1]/','http://intranet/','ftp://example.com/','http://user:pw@example.com/','http://example.com:8080/'])
+  await rejects(firecrawlScrape(fenv, noNet, { url: bad }), bad.startsWith('ftp') || bad.includes('@') || bad.includes(':8080') ? 'invalid_url' : 'url_not_public', 'SSRF blocked: ' + bad)
+await rejects(firecrawlScrape({}, noNet, { url: 'https://example.com' }), 'provider_not_configured', 'firecrawl without key fails safely')
+const fc = await firecrawlScrape(fenv, mock(200, { success: true, data: { markdown: '# Hi', metadata: { title: 'Example', sourceURL: 'https://example.com/', statusCode: 200, creditsUsed: 1 } } }), { url: 'https://example.com' })
+ok(fc.title === 'Example' && fc.status === 'lead_unreviewed' && fc.credits_used === 1 && calls.at(-1)!.url === 'https://api.firecrawl.dev/v1/scrape', 'firecrawl scrape: official endpoint, lead labelled, credits recorded')
+await rejects(firecrawlScrape(fenv, mock(200, { success: false }), { url: 'https://example.com' }), 'provider_error', 'firecrawl unsuccessful response mapped')
 
 console.log('Timeout & redaction')
 const slow = groqGenerate(env, mock(200, {}, 20000), { prompt: 'x' })

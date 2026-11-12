@@ -49,8 +49,10 @@ test('Cloudflare Access JWT verification', async t => {
   await t.test('rejects a tampered signature', async () => {
     const token = await makeToken()
     const parts = token.split('.')
-    const last = parts[2].at(-1) === 'A' ? 'B' : 'A'
-    parts[2] = parts[2].slice(0, -1) + last
+    // Flip a character in the middle: the final base64url char of a 256-byte signature only
+    // carries padding bits, so changing it can decode to identical bytes (flaky, not a forgery).
+    const mid = Math.floor(parts[2].length / 2)
+    parts[2] = parts[2].slice(0, mid) + (parts[2][mid] === 'A' ? 'B' : 'A') + parts[2].slice(mid + 1)
     await assert.rejects(() => verifyAccessToken(parts.join('.'), team, [audience]), (error: any) => error?.code === 'access_invalid')
   })
 
