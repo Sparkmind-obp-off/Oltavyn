@@ -1,6 +1,7 @@
 import { Hono, type MiddlewareHandler } from 'hono'
 import { getCookie, deleteCookie } from 'hono/cookie'
 import { ApiError, AppEnv, PBKDF2_ITERATIONS, audit, hashPassword, newId, nowIso, randomToken, sha256Hex } from '../lib/core'
+import { isGoogleExternalAccount } from '../lib/clerkIdentity'
 
 const COOKIE = 'olt_session'
 
@@ -42,7 +43,7 @@ async function resolveClerkUser(c: any, claims: any) {
   const response=await fetch('https://api.clerk.com/v1/users/'+encodeURIComponent(claims.sub),{headers:{Authorization:'Bearer '+c.env.CLERK_SECRET_KEY}})
   if(!response.ok) throw new ApiError(502,'clerk_profile_unavailable','Profil akun Clerk belum dapat diverifikasi.')
   const profile:any=await response.json()
-  const googleLinked=(profile.external_accounts||[]).some((x:any)=>String(x.provider||'').toLowerCase()==='google')
+  const googleLinked=(profile.external_accounts||[]).some((x:any)=>isGoogleExternalAccount(x.provider))
   if(!googleLinked) throw new ApiError(403,'google_sign_in_required','OLTAVYN hanya menerima akun yang masuk melalui Google.')
   const primary=profile.email_addresses?.find((x:any)=>x.id===profile.primary_email_address_id)
   if(!primary?.email_address || primary.verification?.status!=='verified')
