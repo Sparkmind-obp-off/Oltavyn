@@ -20,8 +20,8 @@ async function hmacHex(secret: string, value: string) {
 function duitkuConfig(env: DuitkuEnv, requireEnabled = true) {
   if (requireEnabled && env.DUITKU_CHECKOUT_ENABLED !== 'true') throw new ApiError(503,'checkout_disabled','Checkout Duitku belum diaktifkan oleh administrator.')
   if (!env.DUITKU_MERCHANT_CODE || !env.DUITKU_API_KEY) throw new ApiError(503,'duitku_not_configured','Duitku belum dikonfigurasi di Cloudflare Secrets.')
-  const base = (env.DUITKU_BASE_URL || 'https://api-sandbox.duitku.com').replace(/\/$/,'')
-  if (!['https://api-sandbox.duitku.com','https://api-prod.duitku.com'].includes(base)) throw new ApiError(503,'duitku_base_url_invalid','Base URL Duitku tidak diizinkan.')
+  const base = (env.DUITKU_BASE_URL || 'https://api-prod.duitku.com').replace(/\/$/,'')
+  if (base !== 'https://api-prod.duitku.com') throw new ApiError(503,'duitku_base_url_invalid','OLTAVYN hanya menerima endpoint Duitku Production. Sandbox tidak diizinkan pada konfigurasi ini.')
   const origin = (env.PUBLIC_APP_URL || 'https://oltavyn.pages.dev').replace(/\/$/,'')
   let u: URL
   try { u = new URL(origin) } catch { throw new ApiError(503,'public_url_invalid','PUBLIC_APP_URL tidak valid.') }
@@ -102,7 +102,7 @@ api.post('/orders/:id/checkout', async c => {
   const data:any = await response.json().catch(()=>null)
   let paymentUrl: URL | null = null
   try { paymentUrl = new URL(String(data?.paymentUrl || '')) } catch {}
-  const allowedPaymentHosts = cfg.base.includes('sandbox') ? ['app-sandbox.duitku.com'] : ['app-prod.duitku.com']
+  const allowedPaymentHosts = ['app-prod.duitku.com']
   if (!response.ok || !paymentUrl || paymentUrl.protocol !== 'https:' || !allowedPaymentHosts.includes(paymentUrl.hostname) || !data?.reference) throw new ApiError(502,'duitku_invoice_failed','Duitku belum berhasil membuat invoice.',{provider_status:response.status,provider_message:clean(data?.Message || data?.message,240)})
   const paymentId = newId('pay'), now = nowIso()
   await c.env.DB.prepare("INSERT INTO commercial_payments (id,order_id,provider,merchant_order_id,reference,payment_method,payment_url,amount_idr,status,provider_payload_json,created_at,updated_at) VALUES (?,?,'duitku_pop',?,?,?,?,?,'pending',?,?,?)")
