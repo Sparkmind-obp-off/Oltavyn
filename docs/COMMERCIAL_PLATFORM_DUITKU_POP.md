@@ -1,6 +1,6 @@
 # OLTAVYN Commercial Platform & Duitku POP Integration Contract
 
-Status: commercial schema/API, customer catalog/order UI, onboarding journey and Clerk integration code committed. Checkout is gated by an explicit Cloudflare flag and remains disabled until configuration and tests pass.
+Status: commercial schema/API, customer catalog/order UI, onboarding journey and Clerk integration code committed. Checkout is gated by an explicit Cloudflare flag and remains disabled until Production configuration and tests pass. Code now rejects Duitku Sandbox.
 Date: 2026-11-11
 Scope: same OLTAVYN application and D1 database; no second product or separate chatbot.
 Principles: Rp0-first, Cloudflare-first, no secret in source control, no production migration/deployment without explicit approval.
@@ -133,3 +133,21 @@ Customer-facing Agent tools must additionally check entitlement and remaining qu
 8. Obtain explicit owner approval before remote D1 migration, production secrets, merchant production mode or deployment.
 
 Current status: Agent tool-calling, commercial D1 migration, seeded catalog, authenticated order APIs, Duitku invoice adapter, signed callback/entitlement flow, customer package catalog, order history/detail UI, first-workspace onboarding, and optional Clerk auth integration are committed. Changes have NOT been typechecked, built, or run against local/sandbox D1 or a live Clerk instance in this session. No remote migration, Clerk secret, Duitku secret, invoice, production payment, or deployment has been performed. Admin operations UI, fulfillment/revision UI, usage ledger, and reconciliation UI remain pending.
+
+
+## 10. Duitku POP Production-only policy (2026-11-12)
+
+OLTAVYN now targets Production only:
+- API base: `https://api-prod.duitku.com`
+- Create Invoice: `https://api-prod.duitku.com/api/merchant/createInvoice`
+- Payment redirect host allowlist: `app-prod.duitku.com`
+- Sandbox endpoint and `app-sandbox.duitku.com` are rejected by application configuration.
+- If `DUITKU_BASE_URL` is absent, the application defaults to the Production base URL; if it is set to anything other than the exact Production URL, checkout fails closed.
+- Required Cloudflare Worker secrets: `DUITKU_MERCHANT_CODE`, `DUITKU_API_KEY`.
+- Production variable: `DUITKU_BASE_URL=https://api-prod.duitku.com`.
+- Production variable: `PUBLIC_APP_URL` must be the canonical HTTPS domain serving OLTAVYN.
+- Keep `DUITKU_CHECKOUT_ENABLED=false` until merchant credentials, callback reachability, callback signature, event idempotency, payment reconciliation, order/entitlement/job state and customer/admin journeys are verified. The owner must separately authorize customer-facing activation.
+- Do not expose secret values to GitHub, Genspark, browser code, logs or chat. Confirm only presence/configuration state.
+- Do not create a real payment as a test. A live financial transaction requires separate explicit approval.
+
+Official reference: https://docs.duitku.com/pop/id/ (Production endpoint, request signature, callback signature, payment URL response and prohibition on trusting browser return parameters).
