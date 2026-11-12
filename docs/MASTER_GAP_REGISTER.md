@@ -18,7 +18,7 @@ Guardrails: no secrets in Git or chat; no paid provider call without explicit ap
 
 | Area | Finding | Severity | Status |
 |---|---|---:|---|
-| D1 environment isolation | Current `wrangler.jsonc` has distinct Preview (`9bf73fdc-efe2-4a19-b0af-46ae59614a78`) and Production (`2456b40f-2d4c-45f6-a10f-82d17606d856`) IDs, and explicit `env.preview`/`env.production` bindings. The Cloudflare account's actual database existence, Pages environment binding parity and applied migration history have not been independently verified. | High | IMPLEMENTED_NOT_VERIFIED |
+| D1 environment isolation | Current `wrangler.jsonc` has distinct Preview (`9bf73fdc-efe2-4a19-b0af-46ae59614a78`) and Production (`2456b40f-2d4c-45f6-a10f-82d17606d856`) IDs, and explicit `env.preview`/`env.production` bindings. Cloudflare read-only API inspection confirms both database resources exist and each records migrations 0001–0009. Pages Production binding is confirmed to the Production D1 ID; Pages Preview configuration returned no D1 binding, so Preview Pages runtime is not yet proven isolated/functional. | High | IMPLEMENTED_NOT_VERIFIED |
 | Agent tool coverage | Active Agent exposes only four read-only tools: workspace summary, products list, channels list, evidence list. | High | PARTIAL |
 | Agent writes | `content.create_draft` exists in registry but is disabled; no active approval-backed write executor was evidenced. | High | NOT_IMPLEMENTED |
 | Agent paid execution | Actor tool is disabled in Agent registry. Provider Actor endpoints exist separately; they are not proof of Agent approval orchestration. | High | PARTIAL |
@@ -127,8 +127,8 @@ Use `docs/GENSPARK_MASTER_EXECUTION_PROMPT.md` as the complete execution contrac
 ### Remaining gaps after refreshed inspection
 | Area | Current evidence | Severity | Status |
 |---|---|---:|---|
-| Actual Preview D1 existence | A distinct ID is present in Wrangler, but linked Cloudflare resource inventory and Pages Preview binding were not independently verified. | High | BLOCKED_EXTERNAL_CONFIGURATION |
-| Migration baseline | Migration scripts exist, but the complete migration directory and applied state in Preview/Production were not verified in this session. | High | IMPLEMENTED_NOT_VERIFIED |
+| Actual Preview D1 and migration history | Cloudflare read-only API confirms `oltavyn-preview` exists and records migrations 0001–0009. Wrangler Preview ID matches it. | Medium | VERIFIED_DONE |
+| Migration baseline | Cloudflare read-only queries confirm both Preview and Production record migrations `0001_initial_schema.sql` through `0009_free_customer_plan.sql`. No migration was run in this audit. | Medium | VERIFIED_DONE |
 | Payment race safety | Payment callback state transitions and idempotent fulfillment are implemented/test cases exist. Concurrent invoice creation for the same pending order and stale pending payment URL expiry/retry behavior still need review/tests. | High | IMPLEMENTED_NOT_VERIFIED |
 | Duitku status reconciliation | Admin reconciliation calls the production Check Transaction endpoint; response-state mapping and actual merchant compatibility remain unverified against the live merchant. | High | BLOCKED_EXTERNAL_CONFIGURATION |
 | Refund/reversal | No verified refund/reversal state machine or reconciliation workflow found in inspected code. | High | NOT_IMPLEMENTED |
@@ -142,7 +142,7 @@ Use `docs/GENSPARK_MASTER_EXECUTION_PROMPT.md` as the complete execution contrac
 | Admin perimeter | Server-side admin email allowlist and Cloudflare Access middleware exist; actual production Access app/AUD/team config and authorized user path need live verification. | High | BLOCKED_EXTERNAL_CONFIGURATION |
 | Privacy/legal/operations | Terms/privacy, retention/deletion, customer support, refunds, incident response and fulfillment SOP require owner review before public launch. | High | BLOCKED_EXTERNAL_CONFIGURATION |
 | Runtime/test evidence | Test commands and test files exist; no successful execution evidence has been recorded in this session. | Critical | IMPLEMENTED_NOT_VERIFIED |
-| Deployment | No Preview/Production Pages deployment or live health check verified in this audit pass. | Critical | NOT_VERIFIED |
+| Deployment | Cloudflare Pages API reports latest Production deployment `5162bdc2` on commit `c40de70695f49feb835d9be3038ce4c0a1dc7fcd` with deploy stage `success`. The Pages Preview deployment was not present in the returned recent deployments. No browser/HTTP functional walkthrough was performed. | High | IMPLEMENTED_NOT_VERIFIED |
 
 ### Test commands available in repository
 ```bash
@@ -159,3 +159,27 @@ npm run test:all
 ```
 
 Do not run `db:migrate:prod`, `db:migrate:preview`, `db:backup:prod`, `deploy:preview` or `deploy:prod` without the applicable owner authorization. Local migration/test commands are safe only after verifying the working directory and local state.
+
+
+## 8. Cloudflare live configuration evidence (read-only, 2026-11-12)
+
+Cloudflare account inventory and D1 SQL reads were performed without writes:
+- Account contains `oltavyn-preview` with UUID `9bf73fdc-efe2-4a19-b0af-46ae59614a78`.
+- Account contains `oltavyn-production` with UUID `2456b40f-2d4c-45f6-a10f-82d17606d856`.
+- Read-only `sqlite_master` query returned the expected OLTAVYN core, affiliate, Agent and commercial tables in both databases.
+- Read-only `d1_migrations` query showed all nine migrations applied in both environments:
+  `0001_initial_schema.sql`, `0002_affiliate_factory.sql`, `0003_affiliate_content_packages.sql`, `0004_agent_live_chat.sql`, `0005_agent_runtime_foundation.sql`, `0006_commercial_platform.sql`, `0007_clerk_identity.sql`, `0008_admin_operations.sql`, `0009_free_customer_plan.sql`.
+- Pages project `oltavyn` exists with domains `oltavyn.pages.dev`, `affiliate-os.avorlune.biz.id`, and `oltavyn.biz.id`.
+- Pages Production configuration points binding `DB` to the Production D1 UUID and sets `DUITKU_BASE_URL=https://api-prod.duitku.com`, `PUBLIC_APP_URL=https://oltavyn.biz.id`, and `DUITKU_CHECKOUT_ENABLED=false`.
+- Pages Preview configuration returned only Clerk secret slots and no `d1_databases.DB` binding. This is a real Preview configuration gap even though Wrangler config has an `env.preview` binding. Align the Pages Preview binding with the Preview D1 UUID before relying on Preview runtime.
+- Latest observed Production deployment: `5162bdc2-bbfc-43a2-b94e-27e2a541c224`, commit `c40de70695f49feb835d9be3038ce4c0a1dc7fcd`, deployment stage `success`, with custom domain aliases.
+- The API response does not establish whether secret values are valid; secret values were not retrieved or displayed. No provider credential or Duitku merchant credential was tested.
+- No Pages Preview deployment appeared in the recent deployment list returned by the API. No functional HTTP/browser test was performed.
+- No Cloudflare configuration, database row, migration, deployment, payment or secret was changed during these read-only checks.
+
+### Updated next actions
+1. Align Cloudflare Pages Preview D1 binding to `9bf73fdc-efe2-4a19-b0af-46ae59614a78`; then deploy/test Preview only after appropriate authorization.
+2. Inspect Preview and Production bindings/secrets by configuration state without ever revealing values; validate Clerk/Provider/Duitku credentials through safe provider-native health checks.
+3. Run local automated suite in a working checkout; the current execution environment cannot resolve `github.com`, so local clone/install/test was not possible in this session.
+4. Perform authenticated and unauthenticated browser/API walkthrough on Preview.
+5. Keep Production checkout disabled; no live payment attempted.
