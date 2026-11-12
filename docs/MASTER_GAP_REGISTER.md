@@ -3,7 +3,7 @@
 **Date:** 2026-11-12  
 **Repository:** Sparkmind-obp-off/Oltavyn  
 **Branch:** main  
-**Baseline inspected:** main after commits `a2f1fd0`, `facbbc7`, `e4edc5a`, `fa0daaa`, `978e3e9` (confirm latest SHA before execution).  
+**Baseline refreshed:** `main` at `c40de70695f49feb835d9be3038ce4c0a1dc7fcd` (2026-11-12). Recent commits `7df4b7c` and `c40de70` materially changed the payment, test and environment baseline.  
 **Scope:** product concept, frontend, backend, D1, Agent, provider integrations, Duitku POP, Clerk, commercial operations, admin, Cloudflare and release readiness.
 
 > This is a source-inspection gap register, not a claim that runtime tests or live integrations passed. Status must be changed only with reproducible evidence.
@@ -18,24 +18,24 @@ Guardrails: no secrets in Git or chat; no paid provider call without explicit ap
 
 | Area | Finding | Severity | Status |
 |---|---|---:|---|
-| D1 environment isolation | `wrangler.jsonc` base D1 and `env.production` point to the same production database ID; no distinct Preview D1 binding is defined in inspected config. | Critical | BLOCKED_EXTERNAL_CONFIGURATION |
+| D1 environment isolation | Current `wrangler.jsonc` has distinct Preview (`9bf73fdc-efe2-4a19-b0af-46ae59614a78`) and Production (`2456b40f-2d4c-45f6-a10f-82d17606d856`) IDs, and explicit `env.preview`/`env.production` bindings. The Cloudflare account's actual database existence, Pages environment binding parity and applied migration history have not been independently verified. | High | IMPLEMENTED_NOT_VERIFIED |
 | Agent tool coverage | Active Agent exposes only four read-only tools: workspace summary, products list, channels list, evidence list. | High | PARTIAL |
 | Agent writes | `content.create_draft` exists in registry but is disabled; no active approval-backed write executor was evidenced. | High | NOT_IMPLEMENTED |
 | Agent paid execution | Actor tool is disabled in Agent registry. Provider Actor endpoints exist separately; they are not proof of Agent approval orchestration. | High | PARTIAL |
 | Publishing | Publication tool is disabled; no authorized publishing integration is evidenced. Manual publishing remains the intended pilot path. | Medium | NOT_IN_SCOPE for pilot |
 | Provider cost accounting | Provider usage endpoint counts audit events; source explicitly returns `cost_tracking: unavailable`. No verified monetary budget reservation/reconciliation is evidenced. | High | NOT_IMPLEMENTED |
 | Provider health | Provider status is based on secret presence and enable flags; this is not a live credential/health check. | Medium | IMPLEMENTED_NOT_VERIFIED |
-| Duitku endpoint default | `src/routes/commercial.ts` defaults `DUITKU_BASE_URL` to Sandbox. This conflicts with the owner's explicit Production target and must be changed to fail closed or explicit Production only. | Critical | NOT_IMPLEMENTED |
+| Duitku endpoint | `src/routes/commercial.ts` now defaults to `https://api-prod.duitku.com` and rejects any non-identical base URL, including Sandbox; invoice redirects are restricted to `app-prod.duitku.com`. | High | IMPLEMENTED_NOT_VERIFIED |
 | Duitku production config | Code accepts Sandbox and Production base URLs; production merchant credentials, callback reachability and production payment host have not been verified. | Critical | BLOCKED_EXTERNAL_CONFIGURATION |
 | Payment activation | Checkout requires `DUITKU_CHECKOUT_ENABLED=true`; keep false until Production checks and owner release approval. | Critical | BLOCKED_EXTERNAL_CONFIGURATION |
-| Payment lifecycle | Callback verifies signature, merchant, amount, merchant order ID and reference; callback/event replay, concurrent callback, late failure-after-success, reconciliation and refund paths require tests and potentially hardening. | Critical | IMPLEMENTED_NOT_VERIFIED |
+| Payment lifecycle | Shared payment state machine, callback event deduplication, terminal paid state, idempotent entitlement/job inserts, and admin Check Transaction reconciliation are now present. `tests/payments.test.ts` contains mocked cases for invalid signatures/mismatches, duplicates, concurrent success, late failure, failure→success, Sandbox refusal and reconciliation. Tests have not been executed in this audit. Refund/reversal handling is not evidenced. | High | IMPLEMENTED_NOT_VERIFIED |
 | Commercial catalog | Catalog and order snapshots are server-owned; catalog currently requires auth per route comment. Public vs authenticated discovery journey needs product/UI validation. | Medium | IMPLEMENTED_NOT_VERIFIED |
 | Entitlement/job creation | Callback creates entitlement/job; unique constraints and atomic/concurrent behavior need D1 integration tests. | Critical | IMPLEMENTED_NOT_VERIFIED |
 | Clerk Google-only | Server verification and Google provider checks exist; Clerk Dashboard settings, real OAuth, key rotation and full session lifecycle remain external/unverified. | High | BLOCKED_EXTERNAL_CONFIGURATION |
 | Admin access | Server-side email allowlist exists; Cloudflare Access and production allowlist configuration are not verified. | High | BLOCKED_EXTERNAL_CONFIGURATION |
 | Service delivery | Jobs, customer deliverables and revisions exist; private R2 delivery, access expiry, revision counting semantics and fulfillment SOP require validation. | High | PARTIAL |
 | Privacy/legal | Privacy/Terms draft status and support/retention/deletion controls require release review. | High | BLOCKED_EXTERNAL_CONFIGURATION |
-| Runtime validation | Clean install, typecheck, build, local D1 migrations, all tests, browser walkthrough not run in this audit session. | Critical | BLOCKED_EXTERNAL_CONFIGURATION |
+| Runtime validation | `package.json` defines typecheck/build, local migration, Agent/provider/payment/Cloudflare Access/smoke/affiliate tests and aggregate `test:all`. Latest commit says it restores clean typecheck and adds payment tests, but this audit session has not run those commands or verified CI results. | Critical | IMPLEMENTED_NOT_VERIFIED |
 | Deployment | No Pages Preview or Production deployment verified in this pass. | Critical | NOT_VERIFIED |
 
 ## 3. Audit areas requiring repository-wide execution
@@ -108,3 +108,54 @@ No real payment has been attempted. Do not interpret the Production target as pe
 ## 6. Genspark execution handoff
 
 Use `docs/GENSPARK_MASTER_EXECUTION_PROMPT.md` as the complete execution contract. Genspark must clone and inspect this repository, execute the audit and safe implementation work, commit verified changes to `main`, and report blockers. It must not switch to Duitku Sandbox or claim a live payment test without an actual owner-authorized transaction.
+
+
+## 7. Refreshed findings from main (2026-11-12)
+
+### Verified by source inspection in the refreshed main branch
+- Latest observed main SHA: `c40de70695f49feb835d9be3038ce4c0a1dc7fcd`.
+- Preview/local D1 and Production D1 are now configured with different IDs in `wrangler.jsonc`; scripts distinguish local, remote Preview and remote Production migration commands.
+- Production config explicitly sets Duitku API base to `https://api-prod.duitku.com`, canonical public URL `https://oltavyn.biz.id`, checkout disabled, and provider enable flags.
+- Duitku runtime config defaults to Production and rejects any non-Production base URL. Invoice payment URL host is allowlisted to `app-prod.duitku.com`.
+- Payment state machine now protects paid status from later failure, creates entitlements/jobs with `INSERT OR IGNORE`, records callback events, and supports admin Check Transaction reconciliation.
+- New `tests/payments.test.ts` covers signature/merchant/amount/reference validation, duplicate callbacks, concurrent success, late failure, failure→success, Sandbox rejection and mocked reconciliation.
+- Admin UI now includes a payment reconciliation action.
+- Scrape.ly adapter base changed to `https://api.scrape.ly/v2`; Actor IDs canonicalize slash/tilde forms.
+- `package.json` defines `test:all` including typecheck, build, local migrations, Agent tool tests, provider tests, payment tests, Cloudflare Access tests, smoke and affiliate smoke.
+- A dedicated Admin HTML shell is now defined and served at `/admin`.
+
+### Remaining gaps after refreshed inspection
+| Area | Current evidence | Severity | Status |
+|---|---|---:|---|
+| Actual Preview D1 existence | A distinct ID is present in Wrangler, but linked Cloudflare resource inventory and Pages Preview binding were not independently verified. | High | BLOCKED_EXTERNAL_CONFIGURATION |
+| Migration baseline | Migration scripts exist, but the complete migration directory and applied state in Preview/Production were not verified in this session. | High | IMPLEMENTED_NOT_VERIFIED |
+| Payment race safety | Payment callback state transitions and idempotent fulfillment are implemented/test cases exist. Concurrent invoice creation for the same pending order and stale pending payment URL expiry/retry behavior still need review/tests. | High | IMPLEMENTED_NOT_VERIFIED |
+| Duitku status reconciliation | Admin reconciliation calls the production Check Transaction endpoint; response-state mapping and actual merchant compatibility remain unverified against the live merchant. | High | BLOCKED_EXTERNAL_CONFIGURATION |
+| Refund/reversal | No verified refund/reversal state machine or reconciliation workflow found in inspected code. | High | NOT_IMPLEMENTED |
+| Agent write lifecycle | Draft write tool remains disabled; no preview/approval/save executor exposed to the Agent. | High | NOT_IMPLEMENTED |
+| Agent run lifecycle | Run/step ledger exists, but no durable approval wait, cancel/resume or end-to-end orchestration across the full affiliate lifecycle was evidenced. | High | PARTIAL |
+| Provider spend controls | Actor API forwards per-run caps, but application-level monetary reservation, cumulative budget ledger and provider reconciliation remain unavailable. Provider usage endpoint explicitly reports `cost_tracking: unavailable`. | High | NOT_IMPLEMENTED |
+| Affiliate lifecycle | Product candidates, evidence, scorecards, channels, content, experiments and observations have a partial data/API foundation. Full Agent-orchestrated Discover→Learn flow and performance attribution require end-to-end verification. | High | PARTIAL |
+| Content compliance/publishing | Human-controlled/manual publishing is the pilot constraint; full claim-to-evidence and disclosure enforcement needs verification. | Medium | PARTIAL |
+| Private asset delivery | Deliverables currently accept HTTPS URLs; private R2 object storage, signed expiry URLs and customer authorization at asset fetch are not evidenced. | High | NOT_IMPLEMENTED |
+| Clerk/Google OAuth | Code-level JWT/identity mapping exists; Clerk dashboard Google-only settings, real production OAuth and origin/issuer alignment remain external. | High | BLOCKED_EXTERNAL_CONFIGURATION |
+| Admin perimeter | Server-side admin email allowlist and Cloudflare Access middleware exist; actual production Access app/AUD/team config and authorized user path need live verification. | High | BLOCKED_EXTERNAL_CONFIGURATION |
+| Privacy/legal/operations | Terms/privacy, retention/deletion, customer support, refunds, incident response and fulfillment SOP require owner review before public launch. | High | BLOCKED_EXTERNAL_CONFIGURATION |
+| Runtime/test evidence | Test commands and test files exist; no successful execution evidence has been recorded in this session. | Critical | IMPLEMENTED_NOT_VERIFIED |
+| Deployment | No Preview/Production Pages deployment or live health check verified in this audit pass. | Critical | NOT_VERIFIED |
+
+### Test commands available in repository
+```bash
+npm run typecheck
+npm run build
+npm run db:migrate:local
+npm run test:agent-tools
+npm run test:providers
+npm run test:payments
+npm run test:cloudflare-access
+npm run test:smoke
+npm run test:affiliate
+npm run test:all
+```
+
+Do not run `db:migrate:prod`, `db:migrate:preview`, `db:backup:prod`, `deploy:preview` or `deploy:prod` without the applicable owner authorization. Local migration/test commands are safe only after verifying the working directory and local state.
