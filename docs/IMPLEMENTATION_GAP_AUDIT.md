@@ -56,3 +56,7 @@ All "BLOCKED pending execution" rows above were executed locally: typecheck pass
 * OPEN — owner action: real browser Google login acceptance test; confirm Google Cloud redirect URI & consent-screen publishing status; read Clerk Dashboard `oauth_callback` events for the 16:14 WIB attempt.
 * OPEN — security: credentials were pasted in chat on 2026-11-12 (Clerk secret keys, Apify, Scrapely, Duitku, Tavily) → rotate, then update Pages secrets.
 * OPEN — unchanged: Duitku POP `Merchant Not Found` (provider action), R2 private storage, CF Web Analytics beacon blocked by CSP (cosmetic).
+
+## Update 2026-11-12 (post-login journey)
+* CLOSED: RC-6…RC-11 (see `DASHBOARD_AFFILIATE_AGENT_RECOVERY_REPORT.md`).
+* OPEN: real-browser acceptance of login → onboarding → Affiliate OS → Agent; rotate credentials pasted in chat.

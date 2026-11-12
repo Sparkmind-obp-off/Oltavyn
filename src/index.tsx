@@ -49,9 +49,9 @@ app.route('/api/commercial',commercialApi)
 app.route('/api/admin',adminApi)
 const shell=`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OLTAVYN — Agentic Content OS</title><meta name="description" content="Workbench berbasis bukti: Riset → Peluang → Konten → Publikasi → Pembelajaran."><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"><link rel="stylesheet" href="/static/app.css"></head><body><a class="skip-link" href="#main">Lewati ke konten</a><div id="app" aria-live="polite"><p class="boot">Memuat OLTAVYN…</p></div><script type="module" src="/static/app.js"></script></body></html>`
 const affiliateShell=`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Affiliate OS — OLTAVYN</title><link rel="stylesheet" href="/static/affiliate.css"></head><body><main class="wrap" id="main">
-<header class="top"><div><div class="muted small">AVORLUNE · OLTAVYN / PRODUK 01</div><h1 style="margin:5px 0">Affiliate OS</h1><div class="muted small">Product Intelligence · Scorecard · Content Factory · Publikasi manual</div></div><div class="row"><a href="/">← Core Engine</a><span id="who" class="pill">Memeriksa sesi…</span></div></header>
+<header class="top"><div><div class="muted small">AVORLUNE · OLTAVYN / PRODUK 01</div><h1 style="margin:5px 0">Affiliate OS</h1><div class="muted small">Product Intelligence · Scorecard · Content Factory · Publikasi manual</div></div><div class="row"><a href="/#/overview">← Dashboard OLTAVYN</a><a href="#agent">AI Agent</a><span id="who" class="pill">Memeriksa sesi…</span></div></header>
 <div id="message" class="msg hide" role="status" aria-live="polite"></div>
-<section id="login" class="card hide"><h2>Masuk ke OLTAVYN</h2><p>Sesi belum aktif. Masuk melalui halaman utama, lalu buka kembali halaman ini.</p><a class="btn" href="/">Buka halaman login</a></section>
+<section id="login" class="card hide"><h2>Masuk ke OLTAVYN</h2><p>Sesi belum aktif. Masuk dengan Google, Anda akan dikembalikan ke Affiliate OS.</p><a class="btn" href="/?return=affiliate#/login">Masuk dengan Google</a></section>
 <section id="app" class="hide">
 <div class="card row"><label for="workspace" style="min-width:90px">Workspace</label><select id="workspace" style="max-width:420px"></select></div>
 <nav class="tabs" role="tablist" aria-label="Bagian Affiliate OS"><button role="tab" data-tab="overview">Ikhtisar</button><button role="tab" data-tab="products">Produk</button><button role="tab" data-tab="detail">Detail produk</button><button role="tab" data-tab="channels">Kanal</button><button role="tab" data-tab="agent">AI Agent</button><button role="tab" data-tab="providers">Provider</button></nav>
@@ -148,6 +148,8 @@ const adminShell=`<!doctype html><html lang="id"><head><meta charset="utf-8"><me
 app.get('/affiliate',(c)=>c.html(affiliateShell))
 app.get('/admin',(c)=>c.html(adminShell))
 app.get('/admin/*',(c)=>c.html(adminShell))
+// Unknown API paths answer JSON, never the SPA HTML shell (RC-6 class of bug).
+app.all('/api/*',(c)=>c.json({error:{code:'not_found',message:'Endpoint tidak ditemukan.',details:null}},404))
 app.get('*',(c)=>c.html(shell))
 app.onError((err,c)=>{if(err instanceof ApiError)return c.json({error:{code:err.code,message:err.message,details:err.details??null}},err.status as any);const reqId=crypto.randomUUID();console.error(JSON.stringify({reqId,path:c.req.path,err:String((err as Error)?.message||err).slice(0,300)}));return c.json({error:{code:'internal_error',message:'Terjadi kesalahan di server.',request_id:reqId}},500)})
 export default app

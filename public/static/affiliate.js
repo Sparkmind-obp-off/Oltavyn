@@ -15,9 +15,29 @@ function show(message, bad = false) {
   const el = $('#message'); el.textContent = message; el.classList.remove('hide'); el.classList.toggle('bad', bad)
   clearTimeout(show.t); show.t = setTimeout(() => el.classList.add('hide'), 6000)
 }
-async function api(method, path, body) {
-  const res = await fetch('/api' + path, { method, credentials: 'same-origin', headers: body !== undefined ? { 'Content-Type': 'application/json' } : {}, body: body !== undefined ? JSON.stringify(body) : undefined })
+// Same Clerk session as the Core Engine: clerk-js is loaded headless here too so every request
+// carries a freshly minted 60 s session token (RC-8). No second login.
+let clerk = null
+async function loadClerk() {
+  try {
+    const cfg = await (await fetch('/api/auth/config', { credentials: 'same-origin' })).json()
+    if (!cfg?.clerk_enabled || !cfg.publishable_key) return
+    const domain = atob(cfg.publishable_key.split('_')[2] || '').slice(0, -1)
+    if (!/^[a-zA-Z0-9.-]+$/.test(domain)) return
+    await new Promise((resolve, reject) => { const sc = document.createElement('script'); sc.src = `https://${domain}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`; sc.async = true; sc.crossOrigin = 'anonymous'; sc.setAttribute('data-clerk-publishable-key', cfg.publishable_key); sc.onload = resolve; sc.onerror = reject; document.head.appendChild(sc) })
+    await window.Clerk.load(); clerk = window.Clerk
+  } catch { clerk = null }
+}
+async function token(skipCache) { try { return clerk?.session ? await clerk.session.getToken(skipCache ? { skipCache: true } : undefined) : null } catch { return null } }
+async function api(method, path, body, retried = false) {
+  const headers = body !== undefined ? { 'Content-Type': 'application/json' } : {}
+  const t = await token(retried); if (t) headers.Authorization = 'Bearer ' + t
+  let res
+  try { res = await fetch('/api' + path, { method, credentials: 'same-origin', headers, body: body !== undefined ? JSON.stringify(body) : undefined }) }
+  catch { throw new Error('Koneksi gagal. Periksa jaringan Anda.') }
   const data = await res.json().catch(() => ({}))
+  if (res.status === 401 && !retried && clerk?.session) return api(method, path, body, true)
+  if (res.status === 401 && !path.startsWith('/auth/')) { showLogin(); throw new Error('Sesi berakhir. Silakan masuk kembali.') }
   if (!res.ok) {
     const det = data.error?.details ? ' (' + Object.entries(data.error.details).filter(([, v]) => v).map(([k, v]) => k + ': ' + v).join('; ') + ')' : ''
     throw new Error((data.error?.message || 'Permintaan gagal.') + det)
@@ -28,10 +48,14 @@ const formValues = (form) => Object.fromEntries([...new FormData(form)].map(([k,
 const dropEmpty = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== ''))
 async function withBusy(btn, fn) { if (btn) btn.disabled = true; try { await fn() } catch (e) { show(e.message, true) } finally { if (btn) btn.disabled = false } }
 const W = () => '/affiliate/workspaces/' + encodeURIComponent(state.ws)
+function showLogin() { $('#app').classList.add('hide'); $('#login').classList.remove('hide'); $('#who').textContent = 'Belum masuk' }
+const TABS = ['overview', 'products', 'detail', 'channels', 'agent', 'providers']
 
 // ---------- Tabs ----------
 function setTab(tab) {
+  if (!TABS.includes(tab)) tab = 'overview'
   state.tab = tab
+  if (location.hash.slice(1) !== tab) history.replaceState(null, '', '#' + tab)
   $$('.tabs button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)))
   $$('[data-panel]').forEach((p) => p.classList.toggle('hide', p.dataset.panel !== tab))
   ;({ overview: loadOverview, products: loadProducts, channels: loadChannels, providers: loadProviders, detail: loadDetail, agent: loadAgent })[tab]?.()
@@ -228,7 +252,7 @@ $('#agent-messages').addEventListener('click', (e) => {
 $('#agent-form').onsubmit = (e) => {
   e.preventDefault()
   const input = $('#agent-message'), btn = $('#agent-send'), message = input.value.trim()
-  if (!message) return
+  if (!message || btn.disabled) return   // duplicate-submit guard
   const useTavily = $('#agent-use-tavily').checked
   const optimistic = []
   const current = $('#agent-messages').querySelectorAll('.agent-message')
@@ -238,9 +262,11 @@ $('#agent-form').onsubmit = (e) => {
   input.value = ''
   $('#agent-messages').insertAdjacentHTML('beforeend', '<div class="agent-thinking" id="agent-thinking"><span class="thinking-dots">•••</span> OLTAVYN sedang berpikir…</div>')
   $('#agent-messages').scrollTop = $('#agent-messages').scrollHeight
+  const sentWs = state.ws
   withBusy(btn, async () => {
     try {
-      const d = await api('POST', '/affiliate/agent/chat', { workspace_id: state.ws, conversation_id: state.agentConversationId, message, use_tavily: useTavily, model: $('#agent-model').value.trim() })
+      const d = await api('POST', '/affiliate/agent/chat', { workspace_id: sentWs, conversation_id: state.agentConversationId, message, use_tavily: useTavily, model: $('#agent-model').value.trim() })
+      if (state.ws !== sentWs) return   // user switched workspace while waiting: never mix conversations
       state.agentConversationId = d.conversation_id
       if (d.message?.metadata?.approvals?.length) { show(d.message.metadata.approvals.length + ' draf menunggu persetujuanmu (belum tersimpan).'); loadAgentApprovals() }
       await loadAgentMessages()
@@ -366,21 +392,31 @@ for (const id of ['apify', 'scrapely']) {
 }
 // ---------- Boot ----------
 async function boot() {
+  await loadClerk()
+  let me
+  try { me = await api('GET', '/auth/me') }
+  catch (e) { show('Gagal memeriksa sesi: ' + e.message + ' Muat ulang halaman untuk mencoba lagi.', true); $('#who').textContent = 'Sesi tidak terperiksa'; return }
+  if (!me.user) { if (me.auth_error) show(me.auth_error.message, true); showLogin(); return }
+  $('#who').textContent = me.user.email
   try {
-    const me = await api('GET', '/auth/me')
-    if (!me.user) { $('#login').classList.remove('hide'); $('#who').textContent = 'Belum masuk'; return }
-    $('#who').textContent = me.user.email
     const [{ workspaces }, rub] = await Promise.all([api('GET', '/workspaces'), api('GET', '/affiliate/rubric')])
     state.rubric = rub.rubric
-    if (!workspaces.length) { show('Buat workspace terlebih dahulu di halaman Core Engine.', true); return }
+    if (!workspaces.length) { location.assign('/?return=affiliate#/overview'); return }   // onboarding, then back here
     $('#app').classList.remove('hide')
     const saved = localStorage.getItem('olt_ws')
     state.ws = workspaces.some((w) => w.id === saved) ? saved : workspaces[0].id
     $('#workspace').innerHTML = workspaces.map((w) => `<option value="${esc(w.id)}" ${w.id === state.ws ? 'selected' : ''}>${esc(w.name)}</option>`).join('')
     $('#workspace').onchange = () => { state.ws = $('#workspace').value; localStorage.setItem('olt_ws', state.ws); state.productId = null; state.agentConversationId = null; setTab(state.tab === 'detail' ? 'products' : state.tab) }
-    setTab('overview')
-  } catch (e) { show(e.message, true) }
+    setTab(location.hash.slice(1) || 'overview')
+  } catch (e) {
+    // Signed in, but workspace data failed: show a retry, not the login screen.
+    show('Workspace belum dapat dimuat: ' + e.message, true)
+    $('#login').classList.add('hide')
+    $('#message').insertAdjacentHTML('afterend', '<p id="aff-retry-wrap"><button class="btn" id="aff-retry">Coba lagi</button></p>')
+    $('#aff-retry').onclick = () => { $('#aff-retry-wrap').remove(); boot() }
+  }
 }
+window.addEventListener('hashchange', () => { if (state.ws && location.hash.slice(1) !== state.tab) setTab(location.hash.slice(1)) })
 $$('.tabs button').forEach((b) => { b.onclick = () => setTab(b.dataset.tab) })
 $('#filter-form').onsubmit = (e) => { e.preventDefault(); loadProducts() }
 $('#filter-status').onchange = () => loadProducts()

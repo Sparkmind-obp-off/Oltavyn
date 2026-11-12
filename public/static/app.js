@@ -24,14 +24,23 @@ const $$ = (sel, root = document) => [...root.querySelectorAll(sel)]
 
 // ---------- API ----------
 class HttpError extends Error { constructor(status, body) { super(body?.error?.message || `HTTP ${status}`); this.status = status; this.body = body } }
-async function api(method, path, data) {
+// Clerk session JWTs live 60 s. Always send a freshly minted token as Bearer (RC-8);
+// the __session cookie remains a fallback.
+async function clerkToken(skipCache = false) {
+  try { return clerkInstance?.session ? await clerkInstance.session.getToken(skipCache ? { skipCache: true } : undefined) : null } catch { return null }
+}
+async function api(method, path, data, _retried = false) {
   const opt = { method, headers: {}, credentials: 'same-origin' }
   if (data !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(data) }
+  const tok = await clerkToken(_retried)
+  if (tok) opt.headers.Authorization = 'Bearer ' + tok
   let res
   try { res = await fetch(`/api${path}`, opt) } catch { throw new HttpError(0, { error: { message: 'Koneksi gagal. Periksa jaringan Anda.' } }) }
   const body = await res.json().catch(() => null)
-  if (res.status === 401 && !path.startsWith('/auth/')) { state.user = null; render(); throw new HttpError(401, body) }
-  if (!res.ok) throw new HttpError(res.status, body)
+  if (res.status === 401 && !_retried && clerkInstance?.session) return api(method, path, data, true)
+  // Only a genuinely invalid session (401 on a protected API) ends the signed-in state.
+  if (res.status === 401 && !path.startsWith('/auth/')) { state.user = null; state.authStatus = 'unauthenticated'; render(); throw new HttpError(401, body) }
+  if (!res.ok) throw new HttpError(res.status, body || { error: { message: res.status === 429 ? 'Terlalu banyak permintaan. Coba lagi sebentar.' : res.status >= 500 ? 'Server sedang bermasalah. Coba lagi.' : `Permintaan gagal (HTTP ${res.status}).` } })
   return body
 }
 
@@ -85,7 +94,7 @@ function formData(form) {
 const compact = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== '' && v !== undefined))
 
 // ---------- State & routing ----------
-const state = { user: undefined, authError: null, workspaces: [], wsId: localStorage.getItem('olt_ws') || null }
+const state = { user: undefined, authStatus: 'loading', authError: null, workspaces: [], workspaceStatus: 'loading', workspaceError: null, wsId: localStorage.getItem('olt_ws') || null }
 let clerkInstance = null
 let clerkConfig = null
 const ws = () => state.workspaces.find((w) => w.id === state.wsId)
@@ -93,6 +102,10 @@ const NAV = [
   ['overview', 'Ikhtisar', '◎'], ['research', 'Riset', '1'], ['opportunities', 'Peluang', '2'],
   ['content', 'Content Studio', '3'], ['experiments', 'Eksperimen', '4'], ['learning', 'Pembelajaran', '5'], ['commercial', 'Paket & Pesanan', 'Rp'], ['settings', 'Pengaturan', '⚙'],
 ]
+// Safe post-login destinations (no open redirect: fixed allowlist).
+const RETURN_TARGETS = { affiliate: '/affiliate', 'affiliate-agent': '/affiliate#agent' }
+function stashReturnTarget() { const r = new URLSearchParams(location.search).get('return'); if (r && RETURN_TARGETS[r]) sessionStorage.setItem('olt_return', r) }
+function consumeReturnTarget() { const r = sessionStorage.getItem('olt_return'); sessionStorage.removeItem('olt_return'); return RETURN_TARGETS[r] || null }
 function route() {
   const path = location.hash.replace(/^#\/?/, '').split('?')[0]
   const [page = 'overview', id = null] = path.split('/')
@@ -133,7 +146,7 @@ async function startGoogleSignIn(btn){
   btn.disabled=true;btn.textContent='Mengalihkan ke Google…'
   try{
     // An existing Clerk session (e.g. from an earlier attempt) is reused instead of starting a new OAuth flow.
-    if(clerkInstance.session){ await refreshMe(); if(state.user) return }
+    if(clerkInstance.session){ await refreshMe(); if(state.user) return; btn.disabled=false; btn.textContent='Lanjutkan dengan Google'; return }
     await clerkInstance.client.signIn.authenticateWithRedirect({
       strategy:'oauth_google',
       redirectUrl:location.origin+SSO_CALLBACK_PATH,
@@ -148,7 +161,6 @@ function clerkError(e){
   const code=e?.errors?.[0]?.code||e?.code||'clerk_error'
   const map={
     external_account_not_found:'Akun Google belum terdaftar dan pendaftaran otomatis gagal diselesaikan. Silakan coba lagi.',
-    session_exists:'Anda sudah masuk. Memuat workspace…',
     oauth_access_denied:'Akses Google dibatalkan.',
     not_allowed_access:'Akun ini tidak diizinkan masuk ke OLTAVYN.',
   }
@@ -169,31 +181,54 @@ async function handleSsoCallback(){
     state.user=null;renderAuth('login',clerkError(e))
   }
 }
+let meInflight=null
 async function refreshMe(){
-  try{
-    const me=await api('GET','/auth/me')
-    state.user=me.user;state.authError=me.auth_error||null
-    if(state.user) await loadWorkspaces()
-  }catch{ state.user=null }
-  render()
+  // De-duplicated: Clerk listener, boot and button clicks may race.
+  if(meInflight) return meInflight
+  meInflight=(async()=>{
+    try{
+      const me=await api('GET','/auth/me')
+      state.user=me.user;state.authError=me.auth_error||null
+      state.authStatus=me.user?'authenticated':'unauthenticated'
+    }catch(e){
+      // Network/5xx on /auth/me is NOT a logout: keep a known user, show an error state.
+      if(!state.user){ state.authStatus='error'; state.authError={code:'auth_check_failed',message:e.message||'Gagal memeriksa sesi. Coba lagi.'}; state.user=null }
+    }
+    if(state.user){
+      await loadWorkspaces()
+      const target=consumeReturnTarget()
+      if(target && state.workspaces.length){ location.assign(target); return }
+      if(target) sessionStorage.setItem('olt_return', Object.keys(RETURN_TARGETS).find(k=>RETURN_TARGETS[k]===target))
+    }
+    render()
+  })().finally(()=>{meInflight=null})
+  return meInflight
 }
 async function boot() {
+  stashReturnTarget()
   try {
     clerkConfig=await api('GET','/auth/config')
     if(clerkConfig.clerk_enabled) await loadClerkScripts(clerkConfig)
-    if(clerkInstance && location.pathname===SSO_CALLBACK_PATH) return handleSsoCallback()
-    const r = await api('GET', '/auth/me'); state.user = r.user; state.authError = r.auth_error || null
-    if (state.user) await loadWorkspaces()
-  } catch(e) { state.user = null; if(!clerkInstance && clerkConfig?.clerk_enabled) state.authError={code:'clerk_load_failed',message:'Gagal memuat layanan login. Periksa koneksi lalu muat ulang halaman.'} }
+  } catch(e) { if(clerkConfig?.clerk_enabled || !clerkConfig) state.authError={code:'clerk_load_failed',message:'Gagal memuat layanan login. Periksa koneksi lalu muat ulang halaman.'} }
+  if(clerkInstance && location.pathname===SSO_CALLBACK_PATH) return handleSsoCallback()
   const qErr=new URLSearchParams(location.search).get('auth_error')
-  if(qErr && !state.user){ state.authError={code:qErr,message:'Login Google belum selesai. Silakan coba lagi.'}; history.replaceState(null,'','/'+location.hash) }
-  render()
+  if(new URLSearchParams(location.search).has('return') || qErr) history.replaceState(null,'','/'+location.hash)
+  await refreshMe()
+  if(qErr && !state.user){ state.authError={code:qErr,message:'Login Google belum selesai. Silakan coba lagi.'}; render() }
 }
 async function loadWorkspaces() {
-  const r = await api('GET', '/workspaces')
-  state.workspaces = r.workspaces
-  if (!ws()) state.wsId = state.workspaces[0]?.id || null
-  if (state.wsId) localStorage.setItem('olt_ws', state.wsId); else localStorage.removeItem('olt_ws')
+  state.workspaceStatus = 'loading'
+  try {
+    const r = await api('GET', '/workspaces')
+    state.workspaces = Array.isArray(r?.workspaces) ? r.workspaces : []
+    state.workspaceStatus = state.workspaces.length ? 'ready' : 'empty'; state.workspaceError = null
+    if (!ws()) state.wsId = state.workspaces[0]?.id || null   // stale/foreign saved id is discarded
+    if (state.wsId) localStorage.setItem('olt_ws', state.wsId); else localStorage.removeItem('olt_ws')
+  } catch (e) {
+    if (e.status === 401) return   // api() already moved to unauthenticated
+    // Workspace failure must never look like a login failure (RC-7).
+    state.workspaceStatus = 'error'; state.workspaceError = e
+  }
 }
 
 // ---------- Render root ----------
@@ -201,12 +236,18 @@ const app = $('#app')
 function render() {
   if (state.user === undefined) return
   if (!state.user) { const p=route().page; if(p==='pricing') return pagePublicCatalog(); return renderAuth(p==='signup'||p==='register'?'register':'login') }
+  if (state.workspaceStatus === 'error') return renderShell(renderWorkspaceError)
+  if (state.workspaceStatus === 'loading') return renderShell((m) => { m.innerHTML = html`<div class="card">${skeleton(4)}</div>`.s })
   if (!state.workspaces.length) return renderShell(renderFirstWorkspace)
   const { page, id } = route()
   const pages = { overview: pageOverview, research: pageResearch, opportunities: pageOpportunities, content: pageContent, experiments: pageExperiments, learning: pageLearning, commercial: pageCommercial, settings: pageSettings }
   renderShell(pages[page] || pageOverview, id)
 }
 
+function renderWorkspaceError(main) {
+  main.innerHTML = html`<div class="card"><h2>Workspace belum dapat dimuat</h2><p class="muted">Anda tetap masuk sebagai ${state.user.email}. Ini bukan masalah login.</p>${errorBox(state.workspaceError)}<button class="btn btn-primary" id="ws-retry">Coba lagi</button></div>`.s
+  $('#ws-retry').onclick = async (e) => { e.currentTarget.disabled = true; await loadWorkspaces(); render() }
+}
 function renderShell(pageFn, id) {
   const { page } = route()
   app.innerHTML = html`
@@ -216,12 +257,12 @@ function renderShell(pageFn, id) {
       <div class="brand"><div class="brand-mark" aria-hidden="true"><span></span></div><div><div class="brand-name">OLTAVYN</div><div class="brand-sub">Agentic Content OS</div></div></div>
       ${state.workspaces.length ? html`<div class="ws-switch"><label for="ws-select">Workspace</label>
         <select id="ws-select">${state.workspaces.map((w) => html`<option value="${w.id}" ${w.id === state.wsId ? raw('selected') : ''}>${w.name}</option>`)}<option value="__new">+ Workspace baru</option></select></div>` : ''}
-      ${state.workspaces.length ? html`<nav class="nav">${NAV.map(([k, label, step]) => html`<a href="#/${k}" ${page === k ? raw('aria-current="page"') : ''}><span class="step" aria-hidden="true">${step}</span>${label}</a>`)}</nav>` : ''}
+      ${state.workspaces.length ? html`<nav class="nav">${NAV.map(([k, label, step]) => html`<a href="#/${k}" ${page === k ? raw('aria-current="page"') : ''}><span class="step" aria-hidden="true">${step}</span>${label}</a>`)}<a href="/affiliate" id="nav-affiliate"><span class="step" aria-hidden="true">AI</span>Affiliate OS &amp; Agent</a></nav>` : ''}
       <div class="sidebar-foot"><div>${state.user.display_name || state.user.email}</div><div class="small muted" style="margin-top:4px">Paket akun: <strong>${String(state.user.plan_tier || "free").toUpperCase()}</strong></div><button class="btn btn-ghost btn-sm" id="logout-btn">Keluar</button></div>
     </aside>
     <main class="main" id="main" tabindex="-1"></main>
   </div>`.s
-  $('#logout-btn').onclick = async () => { if(clerkInstance?.session) await clerkInstance.signOut().catch(()=>{}); await api('POST', '/auth/logout', {}).catch(() => {}); state.user = null; state.workspaces = []; render() }
+  $('#logout-btn').onclick = async () => { if(clerkInstance?.session) await clerkInstance.signOut().catch(()=>{}); await api('POST', '/auth/logout', {}).catch(() => {}); state.user = null; state.authStatus = 'unauthenticated'; state.authError = null; state.workspaces = []; state.workspaceStatus = 'loading'; render() }
   $('#menu-btn').onclick = (e) => { const sb = $('#sidebar'); sb.classList.toggle('open'); e.target.setAttribute('aria-expanded', sb.classList.contains('open')) }
   const sel = $('#ws-select')
   if (sel) sel.onchange = () => {
@@ -247,7 +288,7 @@ async function pagePublicCatalog() {
     const d=await api('GET','/public/catalog')
     const money=n=>new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(Number(n||0))
     $('[data-public-catalog]').innerHTML=d.catalog.map(item=>html`<article class="card package-card"><div class="package-kicker">SERVICE PACKAGE</div><h2>${item.name}</h2><p class="muted">${item.description}</p><div class="package-price">${money(item.price_idr)} <small>${item.billing_type==='monthly'?'/ bulan':'/ sekali'}</small></div><h3>Yang Anda dapatkan</h3><ul>${item.deliverables.map(x=>html`<li>${x}</li>`)}</ul><details><summary>Lihat batasan layanan</summary><ul>${item.exclusions.map(x=>html`<li>${x}</li>`)}</ul></details><button class="btn btn-primary" data-public-buy style="width:100%;margin-top:14px">Daftar untuk memilih paket</button></article>`).map(x=>x.s).join('')
-    $('[data-public-buy]').forEach(b=>b.onclick=()=>renderAuth('register'))
+    $$('[data-public-buy]').forEach(b=>b.onclick=()=>renderAuth('register'))
     if(!d.checkout_enabled) $('[data-public-catalog]').insertAdjacentHTML('beforebegin','<div class="alert alert-info">Katalog tersedia untuk ditinjau. Pemesanan dan pembayaran akan dibuka setelah konfigurasi dan pengujian selesai.</div>')
   }catch(e){$('[data-public-catalog]').innerHTML=errorBox(e).s}
 }
@@ -307,7 +348,7 @@ function renderFirstWorkspace(main, _id, err) {
     catch (er) { renderFirstWorkspace(main, null, er) }
   }
 }
-async function afterWsCreated(w) { state.wsId = w.id; await loadWorkspaces(); toast('Workspace dibuat.'); go('#/overview'); render() }
+async function afterWsCreated(w) { state.wsId = w.id; localStorage.setItem('olt_ws', w.id); await loadWorkspaces(); const t = consumeReturnTarget(); if (t) { location.assign(t); return } toast('Workspace dibuat.'); go('#/overview'); render() }
 
 // ---------- Dialog helper ----------
 function dialog({ title, body, submitLabel = 'Simpan', danger = false, onSubmit, wide = false }) {

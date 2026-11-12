@@ -5,9 +5,21 @@ import { clerkProfileFetcher, parseAuthorizedParties, resolveClerkUser, verifyCl
 
 const COOKIE = 'olt_session'
 
+/**
+ * Clerk session token source. Preferred: `Authorization: Bearer <token>` minted fresh by clerk-js
+ * (Clerk session JWTs live 60 s; the `__session` cookie is only refreshed while clerk-js runs in a
+ * focused tab, so it can be stale — RC-8). Fallback: `__session` cookie. A Bearer header cannot be
+ * attached cross-site without CORS, so CSRF protection is not weakened.
+ */
+export function sessionToken(c: any): string | undefined {
+  const m = /^Bearer\s+([A-Za-z0-9._-]+)$/i.exec(String(c.req.header('authorization') || '').trim())
+  if (m) return m[1]
+  return getCookie(c, '__session') || undefined
+}
+
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   // No session → 401 regardless of configuration (accurate status; never leaks config state).
-  const clerkToken = getCookie(c, '__session')
+  const clerkToken = sessionToken(c)
   if (!clerkToken) throw new ApiError(401, 'unauthenticated', 'Silakan masuk menggunakan Google.')
   if (!c.env.CLERK_PUBLISHABLE_KEY || !c.env.CLERK_JWT_PUBLIC_KEY || !c.env.CLERK_SECRET_KEY || !c.env.CLERK_ISSUER)
     throw new ApiError(503, 'google_auth_not_configured', 'Autentikasi Google OLTAVYN belum dikonfigurasi.')
@@ -51,9 +63,11 @@ auth.post('/logout', async (c) => {
 // Identity-policy failures (non-Google, unverified email, disabled, conflict, misconfiguration) are
 // returned as a safe { code, message } so the UI can explain them instead of silently looping to login.
 const SURFACED_AUTH_ERRORS = new Set(['google_sign_in_required','verified_google_email_required','account_disabled','identity_conflict','identity_provisioning_conflict','google_auth_not_configured','clerk_not_configured','clerk_profile_unavailable'])
-auth.get('/me', async (c, next) => {
-  if (!getCookie(c, COOKIE) && !getCookie(c, '__session')) return c.json({ user: null })
-  try { await requireAuth(c, next) } catch (e) {
+auth.get('/me', async (c) => {
+  if (!getCookie(c, COOKIE) && !sessionToken(c)) return c.json({ user: null })
+  // IMPORTANT: never pass the route's `next` here. Calling it falls through to the SPA catch-all
+  // (app.get('*')) which finalizes an HTML response and silently discards this JSON (RC-6).
+  try { await requireAuth(c, async () => {}) } catch (e) {
     if (e instanceof ApiError && SURFACED_AUTH_ERRORS.has(e.code)) {
       console.warn(JSON.stringify({ evt: 'auth.me.rejected', code: e.code }))
       return c.json({ user: null, auth_error: { code: e.code, message: e.message } })
