@@ -1,85 +1,22 @@
 import { Hono, type MiddlewareHandler } from 'hono'
 import { getCookie, deleteCookie } from 'hono/cookie'
-import { ApiError, AppEnv, PBKDF2_ITERATIONS, audit, hashPassword, newId, nowIso, randomToken, sha256Hex } from '../lib/core'
-import { isGoogleExternalAccount } from '../lib/clerkIdentity'
+import { ApiError, AppEnv, sha256Hex } from '../lib/core'
+import { clerkProfileFetcher, parseAuthorizedParties, resolveClerkUser, verifyClerkToken } from '../lib/clerkAuth'
 
 const COOKIE = 'olt_session'
-
-function b64urlBytes(value: string) {
-  const normalized=value.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(value.length/4)*4,'=')
-  const raw=atob(normalized); return Uint8Array.from(raw,ch=>ch.charCodeAt(0))
-}
-function decodeJwtPart(value: string) { return JSON.parse(new TextDecoder().decode(b64urlBytes(value))) }
-async function verifyClerkToken(token: string, c: any) {
-  const pem=c.env.CLERK_JWT_PUBLIC_KEY as string
-  if (!pem) throw new ApiError(503,'clerk_not_configured','Kunci verifikasi Clerk belum dipasang.')
-  if(token.length>16_384) throw new ApiError(401,'invalid_session','Sesi Clerk tidak valid.')
-  const parts=token.split('.')
-  if(parts.length!==3) throw new ApiError(401,'invalid_session','Sesi Clerk tidak valid.')
-  let header:any, claims:any, valid=false
-  try { header=decodeJwtPart(parts[0]); claims=decodeJwtPart(parts[1]) }
-  catch { throw new ApiError(401,'invalid_session','Sesi Clerk tidak valid.') }
-  if(header.alg!=='RS256') throw new ApiError(401,'invalid_session','Algoritma token Clerk tidak diizinkan.')
-  try {
-    const keyBytes=Uint8Array.from(atob(pem.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\s/g,'')),ch=>ch.charCodeAt(0))
-    const key=await crypto.subtle.importKey('spki',keyBytes,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['verify'])
-    valid=await crypto.subtle.verify('RSASSA-PKCS1-v1_5',key,b64urlBytes(parts[2]),new TextEncoder().encode(parts[0]+'.'+parts[1]))
-  } catch { throw new ApiError(401,'invalid_session','Tanda tangan sesi Clerk tidak valid.') }
-  const now=Math.floor(Date.now()/1000), origin=new URL(c.req.url).origin
-  const allowed=(c.env.CLERK_AUTHORIZED_PARTIES||origin).split(',').map((x:string)=>x.trim()).filter(Boolean)
-  if(!valid || typeof claims.sub!=='string' || !claims.sub || typeof claims.exp!=='number' || claims.exp<=now ||
-     (claims.nbf!==undefined && (typeof claims.nbf!=='number' || claims.nbf>now+30)) ||
-     (c.env.CLERK_ISSUER && claims.iss!==c.env.CLERK_ISSUER) || typeof claims.azp!=='string' || !allowed.includes(claims.azp))
-    throw new ApiError(401,'invalid_session','Sesi Clerk tidak valid atau telah kedaluwarsa.')
-  return claims
-}
-
-async function resolveClerkUser(c: any, claims: any) {
-  // Once a Google identity is linked, use the internal user mapping on subsequent requests.
-  // Google is the only enabled Clerk provider; first-time provisioning validates the provider below.
-  const linked=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status,plan_started_at FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first()
-  if(linked) return linked
-  if (!c.env.CLERK_SECRET_KEY) throw new ApiError(503,'clerk_not_configured','CLERK_SECRET_KEY belum dipasang.')
-  const response=await fetch('https://api.clerk.com/v1/users/'+encodeURIComponent(claims.sub),{headers:{Authorization:'Bearer '+c.env.CLERK_SECRET_KEY}})
-  if(!response.ok) throw new ApiError(502,'clerk_profile_unavailable','Profil akun Clerk belum dapat diverifikasi.')
-  const profile:any=await response.json()
-  const googleLinked=(profile.external_accounts||[]).some((x:any)=>isGoogleExternalAccount(x.provider))
-  if(!googleLinked) throw new ApiError(403,'google_sign_in_required','OLTAVYN hanya menerima akun yang masuk melalui Google.')
-  const primary=profile.email_addresses?.find((x:any)=>x.id===profile.primary_email_address_id)
-  if(!primary?.email_address || primary.verification?.status!=='verified')
-    throw new ApiError(403,'verified_google_email_required','Akun Google harus memiliki email utama terverifikasi.')
-  const email=String(primary.email_address).toLowerCase()
-  const display=[profile.first_name,profile.last_name].filter(Boolean).join(' ').slice(0,80)||null
-  const existing=await c.env.DB.prepare('SELECT id,clerk_user_id,status,plan_tier,plan_status,plan_started_at FROM users WHERE email=?').bind(email).first()
-  if(existing) {
-    if(existing.status!=='active') throw new ApiError(403,'account_disabled','Akun OLTAVYN ini tidak aktif. Hubungi dukungan.')
-    if(existing.clerk_user_id && existing.clerk_user_id!==claims.sub) throw new ApiError(409,'identity_conflict','Email sudah terhubung ke identitas lain.')
-    await c.env.DB.prepare('UPDATE users SET clerk_user_id=?,display_name=COALESCE(display_name,?) WHERE id=?').bind(claims.sub,display,existing.id).run()
-    return {id:existing.id,email,display_name:display,plan_tier:existing.plan_tier||'free',plan_status:existing.plan_status||'active',plan_started_at:existing.plan_started_at||nowIso()}
-  }
-  const id=newId('usr'),salt=randomToken(16),dummy=await hashPassword(randomToken(32),salt),created=nowIso()
-  // OR IGNORE makes first-login provisioning idempotent under concurrent /auth/me requests.
-  await c.env.DB.prepare("INSERT OR IGNORE INTO users (id,email,display_name,password_hash,password_salt,password_iterations,status,created_at,clerk_user_id,plan_started_at) VALUES (?,?,?,?,?,?, 'active',?,?,?)")
-    .bind(id,email,display,dummy,salt,PBKDF2_ITERATIONS,created,claims.sub,created).run()
-  const provisioned=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status,plan_started_at FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first()
-  if(provisioned) {
-    await audit(c.env.DB,{actor_user_id:provisioned.id,action:'user.register.google',resource_type:'user',resource_id:provisioned.id})
-    return provisioned
-  }
-  const conflict=await c.env.DB.prepare("SELECT id,status,clerk_user_id FROM users WHERE email=?").bind(email).first()
-  if(conflict?.status!=='active') throw new ApiError(403,'account_disabled','Akun OLTAVYN ini tidak aktif. Hubungi dukungan.')
-  if(conflict?.clerk_user_id && conflict.clerk_user_id!==claims.sub) throw new ApiError(409,'identity_conflict','Email sudah terhubung ke identitas lain.')
-  throw new ApiError(409,'identity_provisioning_conflict','Akun sedang dibuat pada permintaan lain. Silakan coba masuk kembali.')
-}
 
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
   // No session → 401 regardless of configuration (accurate status; never leaks config state).
   const clerkToken = getCookie(c, '__session')
   if (!clerkToken) throw new ApiError(401, 'unauthenticated', 'Silakan masuk menggunakan Google.')
-  if (!c.env.CLERK_PUBLISHABLE_KEY || !c.env.CLERK_JWT_PUBLIC_KEY || !c.env.CLERK_SECRET_KEY)
+  if (!c.env.CLERK_PUBLISHABLE_KEY || !c.env.CLERK_JWT_PUBLIC_KEY || !c.env.CLERK_SECRET_KEY || !c.env.CLERK_ISSUER)
     throw new ApiError(503, 'google_auth_not_configured', 'Autentikasi Google OLTAVYN belum dikonfigurasi.')
-  const claims = await verifyClerkToken(clerkToken, c)
-  const user = await resolveClerkUser(c, claims)
+  const claims = await verifyClerkToken(clerkToken, {
+    publicKeyPem: c.env.CLERK_JWT_PUBLIC_KEY,
+    issuer: c.env.CLERK_ISSUER,
+    authorizedParties: parseAuthorizedParties(c.env.CLERK_AUTHORIZED_PARTIES, new URL(c.req.url).origin),
+  })
+  const user = await resolveClerkUser(c.env.DB, claims.sub, clerkProfileFetcher(c.env.CLERK_SECRET_KEY))
   c.set('user', user)
   await next()
 }
@@ -111,9 +48,18 @@ auth.post('/logout', async (c) => {
 })
 
 // Returns { user: null } instead of 401 so the SPA can probe session state quietly.
+// Identity-policy failures (non-Google, unverified email, disabled, conflict, misconfiguration) are
+// returned as a safe { code, message } so the UI can explain them instead of silently looping to login.
+const SURFACED_AUTH_ERRORS = new Set(['google_sign_in_required','verified_google_email_required','account_disabled','identity_conflict','identity_provisioning_conflict','google_auth_not_configured','clerk_not_configured','clerk_profile_unavailable'])
 auth.get('/me', async (c, next) => {
   if (!getCookie(c, COOKIE) && !getCookie(c, '__session')) return c.json({ user: null })
-  try { await requireAuth(c, next) } catch { return c.json({ user: null }) }
+  try { await requireAuth(c, next) } catch (e) {
+    if (e instanceof ApiError && SURFACED_AUTH_ERRORS.has(e.code)) {
+      console.warn(JSON.stringify({ evt: 'auth.me.rejected', code: e.code }))
+      return c.json({ user: null, auth_error: { code: e.code, message: e.message } })
+    }
+    return c.json({ user: null })
+  }
   const user=c.get('user')
   return c.json({ user })
 })

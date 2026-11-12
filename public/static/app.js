@@ -85,10 +85,9 @@ function formData(form) {
 const compact = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== '' && v !== undefined))
 
 // ---------- State & routing ----------
-const state = { user: undefined, workspaces: [], wsId: localStorage.getItem('olt_ws') || null }
+const state = { user: undefined, authError: null, workspaces: [], wsId: localStorage.getItem('olt_ws') || null }
 let clerkInstance = null
 let clerkConfig = null
-let clerkAuthMounted = null
 const ws = () => state.workspaces.find((w) => w.id === state.wsId)
 const NAV = [
   ['overview', 'Ikhtisar', '◎'], ['research', 'Riset', '1'], ['opportunities', 'Peluang', '2'],
@@ -113,26 +112,80 @@ async function loadClerkScripts(config) {
     Object.entries(attrs).forEach(([k,v])=>script.setAttribute(k,v))
     script.onload=resolve;script.onerror=()=>reject(new Error('Gagal memuat Clerk Authentication.'));document.head.appendChild(script)
   })
-  await loadScript(`https://${domain}/npm/@clerk/ui@1/dist/ui.browser.js`)
   await loadScript(`https://${domain}/npm/@clerk/clerk-js@6/dist/clerk.browser.js`,{'data-clerk-publishable-key':config.publishable_key})
   if(!window.Clerk) throw new Error('Clerk SDK tidak tersedia.')
-  await window.Clerk.load({ui:{ClerkUI:window.__internal_ClerkUICtor}})
+  // Headless: OLTAVYN renders its own Google button. Clerk prebuilt components used hash routing
+  // (#/sso-callback) that collided with the app's hash router and broke the OAuth transfer flow.
+  await window.Clerk.load()
   clerkInstance=window.Clerk
+  let lastSessionId=clerkInstance.session?.id||null
   clerkInstance.addListener(async resources=>{
-    if(resources?.user){
-      try { const me=await api('GET','/auth/me'); if(me.user){state.user=me.user;await loadWorkspaces();render()} } catch {}
-    } else if(state.user){
-      state.user=null;state.workspaces=[];render()
-    }
+    const sid=resources?.session?.id||null
+    if(sid===lastSessionId || location.pathname===SSO_CALLBACK_PATH) return
+    lastSessionId=sid
+    if(sid){ await refreshMe() }
+    else if(state.user){ state.user=null;state.workspaces=[];render() }
   })
+}
+const SSO_CALLBACK_PATH='/sso-callback'
+async function startGoogleSignIn(btn){
+  if(!clerkInstance?.client) return
+  btn.disabled=true;btn.textContent='Mengalihkan ke Google…'
+  try{
+    // An existing Clerk session (e.g. from an earlier attempt) is reused instead of starting a new OAuth flow.
+    if(clerkInstance.session){ await refreshMe(); if(state.user) return }
+    await clerkInstance.client.signIn.authenticateWithRedirect({
+      strategy:'oauth_google',
+      redirectUrl:location.origin+SSO_CALLBACK_PATH,
+      redirectUrlComplete:location.origin+'/',
+    })
+  }catch(e){
+    btn.disabled=false;btn.textContent='Lanjutkan dengan Google'
+    renderAuth('login',clerkError(e))
+  }
+}
+function clerkError(e){
+  const code=e?.errors?.[0]?.code||e?.code||'clerk_error'
+  const map={
+    external_account_not_found:'Akun Google belum terdaftar dan pendaftaran otomatis gagal diselesaikan. Silakan coba lagi.',
+    session_exists:'Anda sudah masuk. Memuat workspace…',
+    oauth_access_denied:'Akses Google dibatalkan.',
+    not_allowed_access:'Akun ini tidak diizinkan masuk ke OLTAVYN.',
+  }
+  return new HttpError(0,{error:{code,message:map[code]||'Login Google belum berhasil. Silakan coba lagi.'}})
+}
+async function handleSsoCallback(){
+  app.innerHTML=html`<div class="auth-wrap"><section class="auth-panel" style="width:100%"><div class="card auth-card"><h2>Menyelesaikan login Google…</h2><p class="muted">Mohon tunggu sebentar.</p><div id="clerk-captcha"></div></div></section></div>`.s
+  try{
+    // handleRedirectCallback also performs the sign-in → sign-up transfer for first-time Google users.
+    await clerkInstance.handleRedirectCallback({
+      signInForceRedirectUrl:'/', signUpForceRedirectUrl:'/',
+      signInFallbackRedirectUrl:'/', signUpFallbackRedirectUrl:'/',
+      continueSignUpUrl:'/?auth_error=signup_incomplete', firstFactorUrl:'/?auth_error=sign_in_incomplete', secondFactorUrl:'/?auth_error=sign_in_incomplete',
+    },async to=>{ location.replace(new URL(to,location.origin).toString()) })
+  }catch(e){
+    history.replaceState(null,'','/#/login')
+    state.user=null;renderAuth('login',clerkError(e))
+  }
+}
+async function refreshMe(){
+  try{
+    const me=await api('GET','/auth/me')
+    state.user=me.user;state.authError=me.auth_error||null
+    if(state.user) await loadWorkspaces()
+  }catch{ state.user=null }
+  render()
 }
 async function boot() {
   try {
     clerkConfig=await api('GET','/auth/config')
     if(clerkConfig.clerk_enabled) await loadClerkScripts(clerkConfig)
-    const r = await api('GET', '/auth/me'); state.user = r.user
+    if(clerkInstance && location.pathname===SSO_CALLBACK_PATH) return handleSsoCallback()
+    const r = await api('GET', '/auth/me'); state.user = r.user; state.authError = r.auth_error || null
     if (state.user) await loadWorkspaces()
-  } catch { state.user = null }
+  } catch(e) { state.user = null; if(!clerkInstance && clerkConfig?.clerk_enabled) state.authError={code:'clerk_load_failed',message:'Gagal memuat layanan login. Periksa koneksi lalu muat ulang halaman.'} }
+  const qErr=new URLSearchParams(location.search).get('auth_error')
+  if(qErr && !state.user){ state.authError={code:qErr,message:'Login Google belum selesai. Silakan coba lagi.'}; history.replaceState(null,'','/'+location.hash) }
   render()
 }
 async function loadWorkspaces() {
@@ -200,10 +253,7 @@ async function pagePublicCatalog() {
 
 // ---------- Auth ----------
 function renderAuth(mode = 'login', err = null) {
-  if(clerkInstance && clerkAuthMounted){
-    try { clerkInstance.unmountSignIn(clerkAuthMounted); clerkInstance.unmountSignUp(clerkAuthMounted) } catch {}
-    clerkAuthMounted=null
-  }
+  if(!err && state.authError) err=new HttpError(0,{error:state.authError})
   app.innerHTML = html`
   <div class="auth-wrap">
     <section class="auth-hero">
@@ -218,15 +268,14 @@ function renderAuth(mode = 'login', err = null) {
         <h2>Masuk atau buat akun</h2>
         <p class="muted">Gunakan akun Google. Pendaftaran akun baru dilakukan otomatis saat pertama kali masuk.</p>
         ${errorBox(err)}
-        ${clerkInstance ? html`<div id="clerk-auth" class="clerk-auth-slot"></div><p class="small muted auth-provider-note">OLTAVYN hanya menerima autentikasi melalui Google. Email dan kata sandi bukan metode login.</p>` : html`<div class="alert alert-error">Login Google belum tersedia. Administrator perlu mengaktifkan Google Social Connection di Clerk dan mengonfigurasi kunci autentikasi pada Cloudflare.</div>`}
+        ${clerkInstance ? html`<div id="clerk-auth" class="clerk-auth-slot"><button type="button" class="btn btn-primary google-btn" id="google-signin" style="width:100%">Lanjutkan dengan Google</button>${clerkInstance.session && state.authError ? html`<button type="button" class="btn btn-ghost" id="clerk-signout" style="width:100%;margin-top:8px">Keluar dan gunakan akun Google lain</button>` : ''}</div><p class="small muted auth-provider-note">OLTAVYN hanya menerima autentikasi melalui Google. Email dan kata sandi bukan metode login.</p>` : html`<div class="alert alert-error">Login Google belum tersedia. Administrator perlu mengaktifkan Google Social Connection di Clerk dan mengonfigurasi kunci autentikasi pada Cloudflare.</div>`}
         <p class="small muted" style="margin-top:14px">Setelah berhasil masuk, Anda dapat langsung menggunakan paket Free tanpa kartu pembayaran.</p>
       </div>
     </section>
   </div>`.s
   if(clerkInstance){
-    const slot=$('#clerk-auth');clerkAuthMounted=slot
-    if(mode==='register') clerkInstance.mountSignUp(slot,{fallbackRedirectUrl:'/',signInUrl:'/#/login',appearance:{layout:{socialButtonsPlacement:'top',socialButtonsVariant:'blockButton'}}})
-    else clerkInstance.mountSignIn(slot,{fallbackRedirectUrl:'/',signUpUrl:'/#/signup',appearance:{layout:{socialButtonsPlacement:'top',socialButtonsVariant:'blockButton'}}})
+    $('#google-signin').onclick=e=>startGoogleSignIn(e.currentTarget)
+    const so=$('#clerk-signout'); if(so) so.onclick=async()=>{ await clerkInstance.signOut().catch(()=>{}); state.authError=null; renderAuth(mode) }
   }
 }
 
