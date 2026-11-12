@@ -324,3 +324,16 @@ A read-only Cloudflare API audit after the last code commit found:
 - A local Git clone attempt failed because this execution environment could not resolve `github.com`; do not claim local test suite passed.
 
 Prioritize a safe Preview-only binding correction and Preview validation, while preserving the production D1 binding. Do not change Production bindings, checkout activation, production secrets, run a live payment, or deploy Production without separate owner authorization.
+
+
+## 11. Pages auth/provider configuration findings (read-only, 2026-11-12)
+
+The latest Pages project configuration response also shows:
+- No Preview `DB` binding in the Pages Preview config response.
+- No visible Production `CF_ACCESS_TEAM_DOMAIN` or `CF_ACCESS_AUD`. Current middleware intentionally fails closed for all Admin page/API paths if either is absent. Do not bypass it; configure the real Cloudflare Access team domain and application AUD.
+- Production `CLERK_ISSUER` currently points to `https://amused-joey-1181.clerk.accounts.dev`. Confirm whether this is intentionally a dev Clerk instance. Public production authentication must use the intended production Clerk instance/issuer and matching keys/Google provider configuration.
+- No Production `GROQ_API_KEY` secret was listed. The Agent chat handler requires it for LLM tool calling and otherwise falls back to local guidance. Add the secret only through Cloudflare's secret manager after the owner supplies/configures it.
+- Production Actor allowlists were not listed. Keep Actor execution blocked until exact Actors, schemas, terms and pricing are reviewed and explicitly allowlisted.
+- Secret values are not available for verification in the API response. Never attempt to read/display them or copy them into this prompt.
+
+Resolve these as configuration blockers, not by weakening auth or fabricating credentials. Preview and production environments must remain isolated.
