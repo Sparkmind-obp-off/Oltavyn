@@ -50,3 +50,9 @@ For every row, record commit SHA, command/test, timestamp, result and evidence l
 ## Update 2026-11-11 (Phase 3)
 
 All "BLOCKED pending execution" rows above were executed locally: typecheck pass, build pass, clean migration 0001→0003 pass, core smoke 44/44, affiliate smoke + isolation 65/65, provider mock tests 29/29, browser console 0 errors. Details and remaining gaps: `docs/affiliate-factory/IMPLEMENTATION_REPORT.md`. Provider credentials remain unconfigured and unvalidated.
+
+## Update 2026-11-12 (Production Google auth incident)
+* CLOSED (code + deployed `965458c`): RC-1 provider id `oauth_google`; RC-2 Clerk prebuilt hash-routing broke OAuth sign-up transfer (now headless flow + `/sso-callback` path); RC-3 silent `/api/auth/me` failures; RC-4 CSP blocked Clerk Protect; RC-5 callback fallback to Account Portal. See `PRODUCTION_AUTH_ROOT_CAUSE_REPORT.md`.
+* OPEN — owner action: real browser Google login acceptance test; confirm Google Cloud redirect URI & consent-screen publishing status; read Clerk Dashboard `oauth_callback` events for the 16:14 WIB attempt.
+* OPEN — security: credentials were pasted in chat on 2026-11-12 (Clerk secret keys, Apify, Scrapely, Duitku, Tavily) → rotate, then update Pages secrets.
+* OPEN — unchanged: Duitku POP `Merchant Not Found` (provider action), R2 private storage, CF Web Analytics beacon blocked by CSP (cosmetic).
