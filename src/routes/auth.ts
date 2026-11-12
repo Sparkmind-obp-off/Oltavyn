@@ -20,7 +20,7 @@ async function verifyClerkToken(token: string, c: any) {
   catch { throw new ApiError(401,'invalid_session','Sesi Clerk tidak valid.') }
   if(header.alg!=='RS256') throw new ApiError(401,'invalid_session','Algoritma token Clerk tidak diizinkan.')
   try {
-    const keyBytes=Uint8Array.from(atob(pem.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\\s/g,'')),ch=>ch.charCodeAt(0))
+    const keyBytes=Uint8Array.from(atob(pem.replace(/-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\s/g,'')),ch=>ch.charCodeAt(0))
     const key=await crypto.subtle.importKey('spki',keyBytes,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['verify'])
     valid=await crypto.subtle.verify('RSASSA-PKCS1-v1_5',key,b64urlBytes(parts[2]),new TextEncoder().encode(parts[0]+'.'+parts[1]))
   } catch { throw new ApiError(401,'invalid_session','Tanda tangan sesi Clerk tidak valid.') }
