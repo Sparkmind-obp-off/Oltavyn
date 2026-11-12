@@ -12,7 +12,8 @@ const app = new Hono<AppEnv>()
 // loads bootstrap.js from cdn.protect.clerk.com and talks to <cid>-p.client.protect.clerk.com.
 // Blocking it by CSP makes Clerk sign-in/sign-up protect checks fail.
 const CLERK_PROTECT_SCRIPT=['https://cdn.protect.clerk.com']
-const CLERK_PROTECT_CONNECT=['https://cdn.protect.clerk.com','https://*.protect.clerk.com']
+// Protect probes use non-default ports (8443/18443/2082/992); CSP host sources without a port only match 443.
+const CLERK_PROTECT_CONNECT=['https://cdn.protect.clerk.com','https://*.protect.clerk.com','https://*.protect.clerk.com:*']
 app.use('*', async(c,next)=>{
   let clerkOrigin=''
   try { const key=c.env.CLERK_PUBLISHABLE_KEY; const part=key?.split('_')[2]; if(part) clerkOrigin='https://'+atob(part).slice(0,-1) } catch {}
