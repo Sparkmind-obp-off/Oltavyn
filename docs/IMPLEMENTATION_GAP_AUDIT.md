@@ -1,3 +1,5 @@
+> **Historical audit notice (2026-11-12):** This document was written against branch `feat/faceless-affiliate-factory-phase1` and is retained as historical context only. It is not the current main-branch audit. Use [`docs/MASTER_GAP_REGISTER.md`](./MASTER_GAP_REGISTER.md) for the refreshed main baseline and [`docs/PRODUCT_CONCEPT_AND_DECISIONS.md`](./PRODUCT_CONCEPT_AND_DECISIONS.md) for canonical product decisions. The current main branch has since added commercial/payment/admin modules, Clerk identity mapping, Agent tool-calling foundations, Preview/Production D1 separation in Wrangler, Duitku Production-only validation and payment reconciliation/tests. Do not carry forward stale statuses from this file without rechecking current source.
+
 # OLTAVYN implementation gap audit
 
 Date: 2026-11-11  
