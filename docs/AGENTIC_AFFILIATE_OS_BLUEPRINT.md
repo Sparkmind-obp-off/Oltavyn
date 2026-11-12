@@ -240,3 +240,19 @@ Not yet full agentic OS:
 ## 13. Non-goals for initial build
 
 No autonomous publishing, affiliate-link masking, account login automation, cookie/OTP collection or private platform scraping. No unbounded agent loops or autonomous spend. No forced use of every provider. No production-readiness claims based only on a successful commit. No replacement repository, GitHub Actions workflow or duplicate Affiliate OS.
+
+
+## 14. Main branch reconciliation — 2026-11-12
+
+This blueprint remains the canonical architecture and product behavior contract. For current implementation status, use `docs/MASTER_GAP_REGISTER.md`; for the commercial/product decisions and current seeded service scope, use `docs/PRODUCT_CONCEPT_AND_DECISIONS.md`.
+
+The latest observed main baseline after the 2026-11-12 implementation commits includes:
+- separate Preview and Production D1 IDs in Wrangler configuration (Cloudflare resource and Pages binding parity still require verification);
+- a Hono/D1 commercial catalog, orders, Duitku POP checkout/callback, payment state machine, entitlements, service jobs, customer deliverables/revisions and admin operations;
+- Duitku Production-only endpoint enforcement and Check Transaction reconciliation;
+- Google-only Clerk identity mapping code and Cloudflare Access JWT verification code (dashboard/account setup and live authentication remain unverified);
+- a bounded Groq tool-calling loop and Agent run/step persistence, with only four read-only tools enabled;
+- provider adapters for Groq, Tavily, Apify and Scrape.ly, while true application-level spend reservation/reconciliation remains unimplemented;
+- tests defined for Agent tool calling, providers, payments, Cloudflare Access, smoke and affiliate flows; the existence of tests is not evidence they have passed in the latest runtime.
+
+Do not claim the complete Agentic affiliate lifecycle, production readiness, live payment, or deployment until each end-to-end path is tested and evidence is recorded.
