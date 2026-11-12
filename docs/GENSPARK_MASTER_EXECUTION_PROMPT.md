@@ -310,3 +310,17 @@ The repository has moved forward since earlier audit drafts. Do not treat older 
 - dedicated Admin shell and payment reconciliation UI.
 
 Read the latest `docs/MASTER_GAP_REGISTER.md` before execution. Confirm current branch SHA first. Audit actual code and tests; update the register where commits since the baseline have changed status. In particular, do not claim Preview D1 is still configured to the Production ID. Its actual Cloudflare resource and Pages binding still require account-side verification.
+
+
+## 10. Live Cloudflare audit addendum (2026-11-12)
+
+A read-only Cloudflare API audit after the last code commit found:
+- Both D1 resources exist: Preview `9bf73fdc-efe2-4a19-b0af-46ae59614a78` and Production `2456b40f-2d4c-45f6-a10f-82d17606d856`.
+- Both databases record all nine migrations through `0009_free_customer_plan.sql`.
+- Pages Production `oltavyn` binds `DB` to the Production D1 and latest deployment `5162bdc2` on commit `c40de70695f49feb835d9be3038ce4c0a1dc7fcd` reports deploy success.
+- Pages Preview configuration did not return a `d1_databases.DB` binding, even though Wrangler config has a Preview D1 binding. Treat this as an outstanding environment configuration mismatch to resolve.
+- Pages Production variables show Duitku Production base URL and checkout false. Secret values are not validated; do not attempt to display them.
+- No Preview deployment appeared in the recent deployment list. No browser functional test was performed.
+- A local Git clone attempt failed because this execution environment could not resolve `github.com`; do not claim local test suite passed.
+
+Prioritize a safe Preview-only binding correction and Preview validation, while preserving the production D1 binding. Do not change Production bindings, checkout activation, production secrets, run a live payment, or deploy Production without separate owner authorization.
