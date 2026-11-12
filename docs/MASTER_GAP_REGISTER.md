@@ -183,3 +183,26 @@ Cloudflare account inventory and D1 SQL reads were performed without writes:
 3. Run local automated suite in a working checkout; the current execution environment cannot resolve `github.com`, so local clone/install/test was not possible in this session.
 4. Perform authenticated and unauthenticated browser/API walkthrough on Preview.
 5. Keep Production checkout disabled; no live payment attempted.
+
+
+## 9. Pages Production/Preview environment configuration audit (read-only, 2026-11-12)
+
+Additional findings from the Pages project `oltavyn` configuration response:
+- Production Pages has the expected `DB` binding to Production D1 and the production variables for Duitku base URL, public URL, checkout disabled, provider global switch and admin email allowlist.
+- Preview Pages config response has no `d1_databases.DB` binding. Wrangler `env.preview` alone is not sufficient evidence that the Pages Preview environment has the binding. Preview app API routes that use `c.env.DB` may fail until the Pages Preview binding is set.
+- Production Pages config has no visible `CF_ACCESS_TEAM_DOMAIN` or `CF_ACCESS_AUD` variables. `requireCloudflareAccess` explicitly fails closed when either is absent, and middleware is mounted on `/admin`, `/admin/*`, `/api/admin`, and `/api/admin/*`. Therefore the production Command Center/admin APIs are expected to return `access_not_configured` until those two values are configured and the Cloudflare Access application protects the admin paths.
+- Production Pages `CLERK_ISSUER` is `https://amused-joey-1181.clerk.accounts.dev`. This is a Clerk development-domain issuer. Confirm whether production intentionally uses a dev Clerk instance; for a real public production auth environment, configure the actual production Clerk issuer, publishable/secret keys and Google social connection. Do not infer keys are valid from secret slots being listed.
+- Production Pages configuration did not list a `GROQ_API_KEY` secret. The Agent chat handler requires this secret and falls back to a local guidance message if absent. Thus production Agent LLM tool-calling is not configured according to the returned environment config.
+- Provider secret values are not exposed by the API response and were not read. `APIFY_ALLOWED_ACTORS` and `SCRAPELY_ALLOWED_ACTORS` were not present in the returned Production variable list; Actor execution therefore must remain unavailable until a reviewed allowlist is deliberately configured.
+- The returned Production secret slots for Clerk and Duitku do not prove the secret contents are valid or even usable. No secret values were retrieved or changed.
+
+### New blockers
+| Finding | Severity | Status |
+|---|---:|---|
+| Pages Preview D1 binding missing in Pages project configuration response | High | BLOCKED_EXTERNAL_CONFIGURATION |
+| Production Cloudflare Access team domain and audience absent from Pages env config; admin fails closed | Critical | BLOCKED_EXTERNAL_CONFIGURATION |
+| Production Clerk issuer points to `.clerk.accounts.dev`; production instance/origin must be confirmed | High | BLOCKED_EXTERNAL_CONFIGURATION |
+| Production `GROQ_API_KEY` not listed; Agent chat LLM unavailable absent a secret binding | High | BLOCKED_EXTERNAL_CONFIGURATION |
+| Actor allowlists absent; Actor execution must stay blocked | High | BLOCKED_EXTERNAL_CONFIGURATION |
+
+Do not loosen the Cloudflare Access middleware or add a local bypass to production to make Admin appear functional. Configure the correct Access team domain and application AUD instead.
