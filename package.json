@@ -7,7 +7,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "dev:sandbox": "wrangler pages dev dist --ip 0.0.0.0 --port 3000",
-    "db:migrate:local": "wrangler d1 migrations apply oltavyn-production --local",
+    "db:migrate:local": "wrangler d1 migrations apply oltavyn-preview --local",
     "db:migrate:prod": "wrangler d1 migrations apply oltavyn-production --remote --env production",
     "db:reset:local": "rm -rf .wrangler/state/v3/d1 && npm run db:migrate:local",
     "test:smoke": "node tests/smoke.mjs",
@@ -17,7 +17,10 @@
     "test:all": "npm run typecheck && npm run build && npm run db:migrate:local && npm run test:agent-tools && npm run test:providers && npm run test:payments && npm run test:cloudflare-access && npm run test:smoke && npm run test:affiliate",
     "deploy:prod": "npm run build && wrangler pages deploy dist --project-name oltavyn --branch main",
     "test:cloudflare-access": "esbuild tests/cloudflare-access.test.ts --bundle --platform=node --format=esm --log-level=warning --outfile=.tmp/cloudflare-access.test.mjs && node --test .tmp/cloudflare-access.test.mjs",
-    "test:payments": "esbuild tests/payments.test.ts --bundle --platform=node --format=esm --log-level=warning --external:node:sqlite --outfile=.tmp/payments.test.mjs && node --no-warnings .tmp/payments.test.mjs"
+    "test:payments": "esbuild tests/payments.test.ts --bundle --platform=node --format=esm --log-level=warning --external:node:sqlite --outfile=.tmp/payments.test.mjs && node --no-warnings .tmp/payments.test.mjs",
+    "db:migrate:preview": "wrangler d1 migrations apply oltavyn-preview --remote --env preview",
+    "db:backup:prod": "mkdir -p backups && wrangler d1 export oltavyn-production --remote --env production --output backups/oltavyn-production-$(date +%Y%m%d-%H%M%S).sql",
+    "deploy:preview": "npm run build && wrangler pages deploy dist --project-name oltavyn --branch preview"
   },
   "dependencies": {
     "hono": "^4.6.0"

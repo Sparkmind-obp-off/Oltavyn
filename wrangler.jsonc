@@ -4,24 +4,40 @@
   "compatibility_date": "2024-09-23",
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./dist",
+  // Top-level = Preview/local. Preview NEVER binds the production database.
   "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "oltavyn-production",
-      "database_id": "2456b40f-2d4c-45f6-a10f-82d17606d856",
-      "migrations_dir": "migrations"
-    }
+    { "binding": "DB", "database_name": "oltavyn-preview", "database_id": "9bf73fdc-efe2-4a19-b0af-46ae59614a78", "migrations_dir": "migrations" }
   ],
+  "vars": {
+    "DUITKU_CHECKOUT_ENABLED": "false",
+    "PROVIDERS_ENABLED": "false"
+  },
   "env": {
+    "preview": {
+      "d1_databases": [
+        { "binding": "DB", "database_name": "oltavyn-preview", "database_id": "9bf73fdc-efe2-4a19-b0af-46ae59614a78", "migrations_dir": "migrations" }
+      ],
+      "vars": {
+        "DUITKU_CHECKOUT_ENABLED": "false",
+        "PROVIDERS_ENABLED": "false",
+        "CLERK_ISSUER": "https://amused-joey-1181.clerk.accounts.dev"
+      }
+    },
     "production": {
       "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "oltavyn-production",
-          "database_id": "2456b40f-2d4c-45f6-a10f-82d17606d856",
-          "migrations_dir": "migrations"
-        }
-      ]
+        { "binding": "DB", "database_name": "oltavyn-production", "database_id": "2456b40f-2d4c-45f6-a10f-82d17606d856", "migrations_dir": "migrations" }
+      ],
+      "vars": {
+        "DUITKU_BASE_URL": "https://api-prod.duitku.com",
+        "PUBLIC_APP_URL": "https://oltavyn.biz.id",
+        // Keep false until the owner explicitly activates customer checkout.
+        "DUITKU_CHECKOUT_ENABLED": "false",
+        "PROVIDERS_ENABLED": "true",
+        "SCRAPELY_ENABLED": "false",
+        "CLERK_ISSUER": "https://amused-joey-1181.clerk.accounts.dev",
+        "CLERK_AUTHORIZED_PARTIES": "https://oltavyn.biz.id,https://affiliate-os.avorlune.biz.id,https://oltavyn.pages.dev",
+        "OLTAVYN_ADMIN_EMAILS": "sparkmind.support@gmail.com"
+      }
     }
   }
 }

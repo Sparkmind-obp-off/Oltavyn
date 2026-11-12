@@ -9,3 +9,4 @@ logs/
 *.tar.gz
 *.zip
 .tmp/
+backups/
