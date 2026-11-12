@@ -106,54 +106,86 @@ api.post('/orders/:id/checkout', async c => {
   if (!response.ok || !paymentUrl || paymentUrl.protocol !== 'https:' || !allowedPaymentHosts.includes(paymentUrl.hostname) || !data?.reference) throw new ApiError(502,'duitku_invoice_failed','Duitku belum berhasil membuat invoice.',{provider_status:response.status,provider_message:clean(data?.Message || data?.message,240)})
   const paymentId = newId('pay'), now = nowIso()
   await c.env.DB.prepare("INSERT INTO commercial_payments (id,order_id,provider,merchant_order_id,reference,payment_method,payment_url,amount_idr,status,provider_payload_json,created_at,updated_at) VALUES (?,?,'duitku_pop',?,?,?,?,?,'pending',?,?,?)")
-    .bind(paymentId,order.id,order.merchant_order_id,String(data.reference),clean(data.paymentMethod,40)||null,String(data.paymentUrl,2000),order.total_idr,JSON.stringify({statusCode:data.statusCode||null}),now,now).run()
+    .bind(paymentId,order.id,order.merchant_order_id,String(data.reference),clean(data.paymentMethod,40)||null,String(data.paymentUrl).slice(0,2000),order.total_idr,JSON.stringify({statusCode:data.statusCode||null}),now,now).run()
   await audit(c.env.DB,{workspace_id:order.workspace_id,actor_user_id:uid(c),action:'commercial.checkout.created',resource_type:'commercial_payment',resource_id:paymentId})
   return c.json({payment_url:data.paymentUrl,reference:String(data.reference),merchant_order_id:order.merchant_order_id,reused:false})
 })
 
-// Duitku server callback. Never grant access based on browser return/JS callbacks.
+// ---------- Payment state machine (shared by callback and reconciliation) ----------
+// Rules: success is terminal (never downgraded); entitlement/job creation is idempotent via UNIQUE keys;
+// failed/expired payments close the order so the customer starts a fresh order (no reused merchantOrderId).
+export async function applyPaymentResult(db: D1Database, payment: any, result: 'paid' | 'failed' | 'expired', source: string) {
+  const now = nowIso()
+  if (result === 'paid') {
+    await db.prepare("UPDATE commercial_payments SET status='paid',updated_at=? WHERE id=? AND status<>'paid'").bind(now,payment.id).run()
+    await db.prepare("UPDATE commercial_orders SET status='paid',updated_at=? WHERE id=? AND status IN ('pending_payment','payment_failed','expired')").bind(now,payment.order_id).run()
+    const items = await db.prepare('SELECT * FROM commercial_order_items WHERE order_id=?').bind(payment.order_id).all()
+    for (const item of items.results as any[]) {
+      await db.prepare("INSERT OR IGNORE INTO commercial_entitlements (id,order_id,order_item_id,user_id,workspace_id,sku,status,granted_at) VALUES (?,?,?,?,?,?,'active',?)")
+        .bind(newId('ent'),payment.order_id,item.id,payment.user_id,payment.workspace_id,item.sku_snapshot,now).run()
+      const entitlement = await db.prepare('SELECT id FROM commercial_entitlements WHERE order_item_id=?').bind(item.id).first() as any
+      if (entitlement) {
+        const revisionLimit = item.sku_snapshot === 'affiliate_starter' ? 0 : item.sku_snapshot === 'affiliate_growth' ? 2 : 1
+        await db.prepare("INSERT OR IGNORE INTO commercial_service_jobs (id,entitlement_id,order_id,workspace_id,status,brief_json,revision_limit,created_at,updated_at) VALUES (?,?,?,?,'queued','{}',?,?,?)")
+          .bind(newId('job'),entitlement.id,payment.order_id,payment.workspace_id,revisionLimit,now,now).run()
+      }
+    }
+    await audit(db,{workspace_id:payment.workspace_id,actor_user_id:null,action:'commercial.payment.verified',resource_type:'commercial_payment',resource_id:payment.id,outcome:source})
+    return
+  }
+  const r = await db.prepare("UPDATE commercial_payments SET status=?,updated_at=? WHERE id=? AND status IN ('created','pending')").bind(result,now,payment.id).run()
+  if (r.meta.changes) {
+    await db.prepare("UPDATE commercial_orders SET status=?,updated_at=? WHERE id=? AND status='pending_payment'").bind(result==='expired'?'expired':'payment_failed',now,payment.order_id).run()
+    await audit(db,{workspace_id:payment.workspace_id,actor_user_id:null,action:'commercial.payment.'+result,resource_type:'commercial_payment',resource_id:payment.id,outcome:source})
+  }
+}
+const PAYMENT_BY_MOID = "SELECT p.*,o.workspace_id,o.user_id,o.status AS order_status FROM commercial_payments p JOIN commercial_orders o ON o.id=p.order_id WHERE p.merchant_order_id=? AND p.provider='duitku_pop'"
+
+// Duitku server callback (x-www-form-urlencoded). Never grant access based on browser return/JS callbacks.
 export const duitkuWebhook = async (c: any) => {
   const cfg = duitkuConfig(c.env as unknown as DuitkuEnv, false)
   const form = await c.req.parseBody()
   const merchantCode = clean(form.merchantCode,80), amount = clean(form.amount,30), merchantOrderId = clean(form.merchantOrderId,120)
   const resultCode = clean(form.resultCode,20), reference = clean(form.reference,120), signature = clean(form.signature,256)
-  if (!merchantCode || !amount || !merchantOrderId || !reference || !signature || !/^\d+$/.test(amount)) return c.json({error:'invalid_callback'},400)
+  if (!merchantCode || !amount || !merchantOrderId || !reference || !signature || !/^\d+$/.test(amount) || !['00','01'].includes(resultCode)) return c.json({error:'invalid_callback'},400)
   const expected = await hmacHex(cfg.key,merchantCode+amount+merchantOrderId)
   const valid = safeEqual(signature.toLowerCase(),expected.toLowerCase()) && safeEqual(merchantCode,cfg.merchant)
   if (!valid) return c.json({error:'invalid_signature'},401)
-  const payment = await c.env.DB.prepare("SELECT p.*,o.id AS order_id,o.workspace_id,o.user_id,o.status AS order_status FROM commercial_payments p JOIN commercial_orders o ON o.id=p.order_id WHERE p.merchant_order_id=? AND p.provider='duitku_pop'").bind(merchantOrderId).first<any>()
+  const payment = await c.env.DB.prepare(PAYMENT_BY_MOID).bind(merchantOrderId).first() as any
   if (!payment || Number(amount)!==Number(payment.amount_idr) || reference!==payment.reference) return c.json({error:'payment_mismatch'},409)
-  const eventKey = (reference || merchantOrderId)+':'+resultCode+':'+amount
-  const now = nowIso()
+  const eventKey = reference+':'+resultCode+':'+amount
   try {
     await c.env.DB.prepare('INSERT INTO commercial_payment_events (id,payment_id,provider_event_key,result_code,amount_idr,payload_json,signature_valid,received_at) VALUES (?,?,?,?,?,?,1,?)')
-      .bind(newId('pev'),payment.id,eventKey,resultCode,Number(amount),JSON.stringify({merchantCode,amount,merchantOrderId,resultCode,reference,paymentCode:clean(form.paymentCode,80)}),now).run()
+      .bind(newId('pev'),payment.id,eventKey,resultCode,Number(amount),JSON.stringify({merchantOrderId,resultCode,reference,paymentCode:clean(form.paymentCode,80)}),nowIso()).run()
   } catch (e) {
     if (/UNIQUE constraint failed/i.test(String((e as Error).message))) return c.json({ok:true,duplicate:true})
     throw e
   }
-  if (resultCode==='00') {
-    await c.env.DB.prepare("UPDATE commercial_payments SET status='paid',updated_at=? WHERE id=? AND status<>'paid'").bind(now,payment.id).run()
-    await c.env.DB.prepare("UPDATE commercial_orders SET status='paid',updated_at=? WHERE id=? AND status='pending_payment'").bind(now,payment.order_id).run()
-    const items = await c.env.DB.prepare('SELECT * FROM commercial_order_items WHERE order_id=?').bind(payment.order_id).all<any>()
-    for (const item of items.results) {
-      const entitlementId = newId('ent')
-      await c.env.DB.prepare("INSERT OR IGNORE INTO commercial_entitlements (id,order_id,order_item_id,user_id,workspace_id,sku,status,granted_at) VALUES (?,?,?,?,?,?,'active',?)")
-        .bind(entitlementId,payment.order_id,item.id,payment.user_id,payment.workspace_id,item.sku_snapshot,now).run()
-      const entitlement = await c.env.DB.prepare('SELECT id FROM commercial_entitlements WHERE order_item_id=?').bind(item.id).first<any>()
-      if (entitlement) {
-        const revisionLimit = item.sku_snapshot === 'affiliate_starter' ? 0 : item.sku_snapshot === 'affiliate_growth' ? 2 : 1
-        await c.env.DB.prepare("INSERT OR IGNORE INTO commercial_service_jobs (id,entitlement_id,order_id,workspace_id,status,brief_json,revision_limit,created_at,updated_at) VALUES (?,?,?,?,'queued','{}',?,?,?)")
-          .bind(newId('job'),entitlement.id,payment.order_id,payment.workspace_id,revisionLimit,now,now).run()
-      }
-    }
-    await audit(c.env.DB,{workspace_id:payment.workspace_id,actor_user_id:null,action:'commercial.payment.verified',resource_type:'commercial_payment',resource_id:payment.id})
-  } else {
-    await c.env.DB.prepare("UPDATE commercial_payments SET status='failed',updated_at=? WHERE id=? AND status<>'paid'").bind(now,payment.id).run()
-  }
+  await applyPaymentResult(c.env.DB, payment, resultCode==='00' ? 'paid' : 'failed', 'callback')
   return c.json({ok:true})
 }
 
+// Official Duitku "Check Transaction" (production host only). Used by admin reconciliation; never charges.
+export const DUITKU_STATUS_URL = 'https://passport.duitku.com/webapi/api/merchant/transactionStatus'
+export async function reconcilePayment(env: any, db: D1Database, merchantOrderId: string, fetchImpl: typeof fetch = fetch) {
+  const cfg = duitkuConfig(env as DuitkuEnv, false)
+  const payment = await db.prepare(PAYMENT_BY_MOID).bind(merchantOrderId).first() as any
+  if (!payment) throw new ApiError(404,'payment_not_found','Pembayaran untuk pesanan ini belum dibuat.')
+  const signature = await hmacHex(cfg.key, cfg.merchant + merchantOrderId)
+  const ctrl = new AbortController(); const t = setTimeout(()=>ctrl.abort(),15000)
+  let data: any
+  try {
+    const res = await fetchImpl(DUITKU_STATUS_URL,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({merchantCode:cfg.merchant,merchantOrderId,signature}).toString(),signal:ctrl.signal})
+    data = await res.json().catch(()=>null)
+    if (!res.ok || !data) throw new ApiError(502,'duitku_status_failed','Duitku belum dapat memberikan status transaksi.',{provider_status:res.status})
+  } catch (e) { if (e instanceof ApiError) throw e; throw new ApiError(504,'duitku_unreachable','Duitku tidak dapat dihubungi.') } finally { clearTimeout(t) }
+  const code = clean(data.statusCode,4), amount = Number(data.amount)
+  if (data.merchantOrderId && String(data.merchantOrderId) !== merchantOrderId) throw new ApiError(502,'duitku_status_mismatch','Respons Duitku tidak cocok dengan pesanan.')
+  if (code === '00' && amount !== Number(payment.amount_idr)) throw new ApiError(409,'duitku_amount_mismatch','Nominal dari Duitku tidak sama dengan pesanan; perlu penanganan manual.')
+  const result = code === '00' ? 'paid' : code === '02' ? 'failed' : null
+  if (result) await applyPaymentResult(db, payment, result, 'reconciliation')
+  return { merchant_order_id: merchantOrderId, provider_status_code: code || null, provider_status_message: clean(data.statusMessage,120) || null, applied: result ?? 'none_pending' }
+}
 
 api.get('/orders/:id/work', async c => {
   const order=await c.env.DB.prepare('SELECT id,status,created_at,updated_at FROM commercial_orders WHERE id=? AND user_id=?').bind(c.req.param('id'),uid(c)).first<any>()

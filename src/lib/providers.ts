@@ -25,15 +25,17 @@ const bases: Record<ProviderId, [string, string]> = {
   groq: ['GROQ_BASE_URL', 'https://api.groq.com/openai/v1'],
   tavily: ['TAVILY_BASE_URL', 'https://api.tavily.com'],
   apify: ['APIFY_BASE_URL', 'https://api.apify.com/v2'],
-  scrapely: ['SCRAPELY_BASE_URL', 'https://api.scrape.ly'],
+  scrapely: ['SCRAPELY_BASE_URL', 'https://api.scrape.ly/v2'],
 }
 const baseUrl = (env: ProviderEnv, id: ProviderId) => (env[bases[id][0]] || bases[id][1]).replace(/\/+$/, '')
 
 export function providerEnabled(env: ProviderEnv, id: ProviderId) {
   return env.PROVIDERS_ENABLED !== 'false' && env[`${id.toUpperCase()}_ENABLED`] !== 'false'
 }
+// Actor IDs are compared in canonical `username~name` form ('/' and '~' are equivalent in both APIs).
+export const canonicalActor = (id: string) => id.trim().replace('/', '~')
 export function allowedActors(env: ProviderEnv, id: 'apify' | 'scrapely') {
-  return String(env[`${id.toUpperCase()}_ALLOWED_ACTORS`] || '').split(',').map((s) => s.trim()).filter(Boolean)
+  return String(env[`${id.toUpperCase()}_ALLOWED_ACTORS`] || '').split(',').map((s) => canonicalActor(s)).filter(Boolean)
 }
 
 // Status is configuration-only: presence of a secret is NOT credential validation.
@@ -117,7 +119,7 @@ export async function runActor(env: ProviderEnv, fetchImpl: FetchLike, id: 'apif
   const key = requireKey(env, id)
   const actorId = str(input.actor_id, 180).trim()
   if (!actorId || !/^[A-Za-z0-9._~\-\/]+$/.test(actorId)) throw new ProviderError(400, 'validation_failed', 'Actor ID tidak valid.')
-  if (!allowedActors(env, id).includes(actorId)) throw new ProviderError(403, 'actor_not_allowlisted', `Actor belum ada di ${id.toUpperCase()}_ALLOWED_ACTORS. Pemilik harus menyetujui Actor ini terlebih dahulu.`)
+  if (!allowedActors(env, id).includes(canonicalActor(actorId))) throw new ProviderError(403, 'actor_not_allowlisted', `Actor belum ada di ${id.toUpperCase()}_ALLOWED_ACTORS. Pemilik harus menyetujui Actor ini terlebih dahulu.`)
   if (input.confirm_run !== true) throw new ProviderError(400, 'explicit_approval_required', 'confirm_run=true wajib untuk setiap eksekusi. Konfirmasi bukan batas belanja.')
   const body = input.input && typeof input.input === 'object' && !Array.isArray(input.input) ? input.input : {}
   if (JSON.stringify(body).length > 20000) throw new ProviderError(400, 'input_too_large', 'Input Actor maksimal 20 KB.')
@@ -127,7 +129,7 @@ export async function runActor(env: ProviderEnv, fetchImpl: FetchLike, id: 'apif
   if (!Number.isFinite(maxCharge) || maxCharge < 0.01 || maxCharge > 1) throw new ProviderError(400, 'spend_cap_required', 'Batas biaya wajib diisi antara USD 0,01 dan USD 1,00 untuk satu run.')
   if (!Number.isInteger(maxItems) || maxItems < 1 || maxItems > 100) throw new ProviderError(400, 'max_items_invalid', 'Batas item wajib angka bulat 1–100.')
   if (!Number.isInteger(timeout) || timeout < 1 || timeout > 120) throw new ProviderError(400, 'timeout_invalid', 'Timeout wajib angka bulat 1–120 detik.')
-  const path = id === 'apify' ? `/acts/${encodeURIComponent(actorId.replace('/', '~'))}/runs` : `/actors/${encodeURIComponent(actorId)}/runs`
+  const path = id === 'apify' ? `/acts/${encodeURIComponent(canonicalActor(actorId))}/runs` : `/actors/${encodeURIComponent(canonicalActor(actorId))}/runs`
   const query = new URLSearchParams({ maxTotalChargeUsd: String(maxCharge), maxItems: String(maxItems), timeout: String(timeout) })
   const data = await call(fetchImpl, id, `${baseUrl(env, id)}${path}?${query.toString()}`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const run = data?.data || data || {}

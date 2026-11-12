@@ -125,6 +125,7 @@ const affiliateShell=`<!doctype html><html lang="id"><head><meta charset="utf-8"
 </div>
 </section>
 </section></main><script src="/static/affiliate.js" defer></script></body></html>`
+const adminShell=`<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Command Center — OLTAVYN</title><link rel="stylesheet" href="/static/admin.css"></head><body><div class="admin-shell"><header class="admin-top"><a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true">O</span><span>OLTAVYN<small>COMMAND CENTER</small></span></a><div class="top-actions"><span id="admin-who" class="muted">Memeriksa akses…</span><a class="button" href="/">← Aplikasi</a></div></header><div id="admin-message" role="status" aria-live="polite"></div><main id="admin-main"><p class="muted">Memuat…</p></main></div><script src="/static/admin.js" defer></script></body></html>`
 app.get('/affiliate',(c)=>c.html(affiliateShell))
 app.get('/admin',(c)=>c.html(adminShell))
 app.get('/admin/*',(c)=>c.html(adminShell))

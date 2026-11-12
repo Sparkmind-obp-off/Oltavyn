@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { ApiError, AppEnv, audit, newId, nowIso, rateLimit } from '../lib/core'
 import { requireAuth } from './auth'
+import { reconcilePayment } from './commercial'
 
 const api = new Hono<AppEnv>()
 const clean = (v: unknown, max=2000) => typeof v === 'string' ? v.trim().slice(0,max) : ''
@@ -100,5 +101,14 @@ api.patch('/revisions/:id',async c=>{
   await c.env.DB.prepare('INSERT INTO commercial_job_events (id,job_id,actor_user_id,event_type,note,created_at) VALUES (?,?,?,\'revision_updated\',?,?)').bind(newId('jev'),revision.job_id,uid(c),status+': '+note,nowIso()).run()
   await audit(c.env.DB,{workspace_id:revision.workspace_id,actor_user_id:uid(c),action:'admin.revision.updated',resource_type:'commercial_revision_request',resource_id:revision.id})
   return c.json({ok:true})
+})
+// Payment reconciliation via Duitku Check Transaction (read-only at Duitku; applies the same idempotent state machine).
+api.post('/orders/:id/reconcile',async c=>{
+  await rateLimit(c.env.DB,'admin-reconcile:'+uid(c),30,3600)
+  const order=await c.env.DB.prepare('SELECT id,merchant_order_id,workspace_id FROM commercial_orders WHERE id=?').bind(c.req.param('id')).first<any>()
+  if(!order) throw new ApiError(404,'not_found','Pesanan tidak ditemukan.')
+  const result=await reconcilePayment(c.env,c.env.DB,order.merchant_order_id)
+  await audit(c.env.DB,{workspace_id:order.workspace_id,actor_user_id:uid(c),action:'admin.payment.reconciled',resource_type:'commercial_order',resource_id:order.id,outcome:String(result.applied)})
+  return c.json({ok:true,result})
 })
 export default api

@@ -36,7 +36,7 @@ async function verifyClerkToken(token: string, c: any) {
 async function resolveClerkUser(c: any, claims: any) {
   // Once a Google identity is linked, use the internal user mapping on subsequent requests.
   // Google is the only enabled Clerk provider; first-time provisioning validates the provider below.
-  const linked=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status,plan_started_at FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first<any>()
+  const linked=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status,plan_started_at FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first()
   if(linked) return linked
   if (!c.env.CLERK_SECRET_KEY) throw new ApiError(503,'clerk_not_configured','CLERK_SECRET_KEY belum dipasang.')
   const response=await fetch('https://api.clerk.com/v1/users/'+encodeURIComponent(claims.sub),{headers:{Authorization:'Bearer '+c.env.CLERK_SECRET_KEY}})
@@ -49,7 +49,7 @@ async function resolveClerkUser(c: any, claims: any) {
     throw new ApiError(403,'verified_google_email_required','Akun Google harus memiliki email utama terverifikasi.')
   const email=String(primary.email_address).toLowerCase()
   const display=[profile.first_name,profile.last_name].filter(Boolean).join(' ').slice(0,80)||null
-  const existing=await c.env.DB.prepare('SELECT id,clerk_user_id,status,plan_tier,plan_status,plan_started_at FROM users WHERE email=?').bind(email).first<any>()
+  const existing=await c.env.DB.prepare('SELECT id,clerk_user_id,status,plan_tier,plan_status,plan_started_at FROM users WHERE email=?').bind(email).first()
   if(existing) {
     if(existing.status!=='active') throw new ApiError(403,'account_disabled','Akun OLTAVYN ini tidak aktif. Hubungi dukungan.')
     if(existing.clerk_user_id && existing.clerk_user_id!==claims.sub) throw new ApiError(409,'identity_conflict','Email sudah terhubung ke identitas lain.')
@@ -60,22 +60,23 @@ async function resolveClerkUser(c: any, claims: any) {
   // OR IGNORE makes first-login provisioning idempotent under concurrent /auth/me requests.
   await c.env.DB.prepare("INSERT OR IGNORE INTO users (id,email,display_name,password_hash,password_salt,password_iterations,status,created_at,clerk_user_id,plan_started_at) VALUES (?,?,?,?,?,?, 'active',?,?,?)")
     .bind(id,email,display,dummy,salt,PBKDF2_ITERATIONS,created,claims.sub,created).run()
-  const provisioned=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status,plan_started_at FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first<any>()
+  const provisioned=await c.env.DB.prepare("SELECT id,email,display_name,plan_tier,plan_status,plan_started_at FROM users WHERE clerk_user_id=? AND status='active'").bind(claims.sub).first()
   if(provisioned) {
     await audit(c.env.DB,{actor_user_id:provisioned.id,action:'user.register.google',resource_type:'user',resource_id:provisioned.id})
     return provisioned
   }
-  const conflict=await c.env.DB.prepare("SELECT id,status,clerk_user_id FROM users WHERE email=?").bind(email).first<any>()
+  const conflict=await c.env.DB.prepare("SELECT id,status,clerk_user_id FROM users WHERE email=?").bind(email).first()
   if(conflict?.status!=='active') throw new ApiError(403,'account_disabled','Akun OLTAVYN ini tidak aktif. Hubungi dukungan.')
   if(conflict?.clerk_user_id && conflict.clerk_user_id!==claims.sub) throw new ApiError(409,'identity_conflict','Email sudah terhubung ke identitas lain.')
   throw new ApiError(409,'identity_provisioning_conflict','Akun sedang dibuat pada permintaan lain. Silakan coba masuk kembali.')
 }
 
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  if (!c.env.CLERK_PUBLISHABLE_KEY || !c.env.CLERK_JWT_PUBLIC_KEY || !c.env.CLERK_SECRET_KEY)
-    throw new ApiError(503, 'google_auth_not_configured', 'Autentikasi Google OLTAVYN belum dikonfigurasi.')
+  // No session → 401 regardless of configuration (accurate status; never leaks config state).
   const clerkToken = getCookie(c, '__session')
   if (!clerkToken) throw new ApiError(401, 'unauthenticated', 'Silakan masuk menggunakan Google.')
+  if (!c.env.CLERK_PUBLISHABLE_KEY || !c.env.CLERK_JWT_PUBLIC_KEY || !c.env.CLERK_SECRET_KEY)
+    throw new ApiError(503, 'google_auth_not_configured', 'Autentikasi Google OLTAVYN belum dikonfigurasi.')
   const claims = await verifyClerkToken(clerkToken, c)
   const user = await resolveClerkUser(c, claims)
   c.set('user', user)
