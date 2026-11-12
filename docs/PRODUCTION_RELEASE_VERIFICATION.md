@@ -23,3 +23,16 @@ Real Google OAuth → Clerk session → D1 user → workspace → Agent chat. Se
 
 ## Rollback
 Cloudflare Dashboard → Pages → oltavyn → Deployments → `71e7bd5b` → "Rollback to this deployment". Same Clerk Production keys; no secret changes required. Rolling back re-introduces RC-1…RC-5.
+
+## Release 2 — post-login journey (RC-6…RC-11)
+| Item | Evidence |
+|---|---|
+| Active Production deployment | `af3c23b9` built from commit **`142b549`** (CF BYOK, owner-approved in chat) |
+| `/api/auth/me` (no session / forged Bearer) | 200 `application/json` `{user:null}` (was HTML shell for valid sessions — RC-6) |
+| `/api/workspaces` no session | 401 JSON |
+| Unknown `/api/*` | 401 JSON when unauthenticated (auth middleware runs first), 404 JSON when authenticated (route test) |
+| `#/pricing` (headless Chromium, prod) | 3 catalog cards, no error alert, no page errors (RC-9) |
+| `/affiliate` without session | login card → `/?return=affiliate#/login`, no page errors |
+| `/admin` | 302 Cloudflare Access (unchanged) |
+| D1 migrations / secrets | none changed |
+| Rollback target | `6e56c04e` (`965458c`) — same Clerk keys; re-introduces RC-6…RC-11 |
