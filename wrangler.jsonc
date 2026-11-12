@@ -36,7 +36,9 @@
         "SCRAPELY_ENABLED": "false",
         "CLERK_ISSUER": "https://amused-joey-1181.clerk.accounts.dev",
         "CLERK_AUTHORIZED_PARTIES": "https://oltavyn.biz.id,https://affiliate-os.avorlune.biz.id,https://oltavyn.pages.dev",
-        "OLTAVYN_ADMIN_EMAILS": "sparkmind.support@gmail.com"
+        "OLTAVYN_ADMIN_EMAILS": "sparkmind.support@gmail.com",
+        "GROQ_MODEL": "openai/gpt-oss-120b",
+        "CF_ACCESS_TEAM_DOMAIN": "purple-rice-17ec.cloudflareaccess.com"
       }
     }
   }
